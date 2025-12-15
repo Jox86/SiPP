@@ -1,0 +1,35 @@
+OJO:
+
+-agregar modo oscuro a todas las interfaces. guiarse por los estilos del modo oscuro de la interfaz Reportes
+-cambiar colores a rojo #4E0101
+-crear Nueva Paleta de Colores
+-cambiar fondo de iconoes de topbar para que en vez de hacer hover en fondo cuadrado, se haga hover iluminandose el icono, ilimunar cerrar sesion con rojo
+-crear nueva paleta de colores
+-cambiar fondo general de la app a tono background (Pedidos)
+-cambiar fondos de contenedores, tablas, secciones, tarjetas a tono background (Pedidos) con sombra
+-guiarse por los estilos del modo oscuro de la interfaz Reportes para resto de interfaces
+-cambiar fondo de formularios a estilo de formulario en Proyectos interfaz
+
+
+
+Proyectos:
+-el presupuesto que se calcula en la interfaz Pedidos debe mostrarse en Proyectos
+
+Notificaciones:
+- debe mostrar la notificacion en campana de todos los datos de los mensajes de pedidos
+- debe mostrar cuando cambia de estado un pedido desde Mensajes interfaz y ademas en caso de admin esta listo para generar el acta de conformidad
+-cambiar notificaciones para que no hayan datos simulados, solo datos reales
+
+**Dashboard
+- mejorar graficos y datos que se muestran
+
+corrige en Reportes:
+-al presionar en el boton 'Generar PDF General de Todos los Pedidos' se descarga el pdf juntos al pdf de 'Generar PDF de Pedidos Seleccionados' sin que se haya seleccionado ningun pedido
+
+**Pedidos:
+-se editan los datos de empresa pero al guardarlos se duplica la empresa con los nuevos datos modificados pero tambien se pierde lo modificado en productos, etc al haber realizado antes compras (ej. los productos agotados se desmarcan y vuelven a estar disponibles)
+
+Mensajes
+-en el modo oscuro, deben volverse oscuros: el fondo de la interfaz, fondo de la tabla en cada fila y columna, fondo de pestañas, fondo de filtros; deben volverse claras: todas las letras, textos, subtitulos, parrafos, titulos, encabezados, numeros, caracteres e iconos
+-No puedo marcar manualmente como leido o no leido algunos mensajes. cuando se abra un mensajes para mostrar los detalles debe marcarse como leido
+- el fondo del box y grid deben ser colos.paper, mantener el hover, el fondo de Detalles del Pedido debe ser del mismo que el actual, manten como está la ventana de archivados.
