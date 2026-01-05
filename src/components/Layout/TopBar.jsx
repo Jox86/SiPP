@@ -164,31 +164,6 @@ export default function TopBar({ open }) {
 
         {/* Acciones */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          {/* Información del usuario */}
-            <Tooltip title={currentUser?.fullName || 'Usuario'}>
-              <Box sx={{ display: 'flex', alignItems: 'center', mr: 1 }}>
-                <Avatar
-                  sx={{
-                    width: 35,
-                    height: 35,
-                    fontSize: '1.4rem',
-                    backgroundColor: 'transparent',
-                    color: colors.borgundy,
-                    fontWeight: 'bold',
-                    border: `1px solid ${colors.borgundy}`,
-                    transition: 'all 0.3s ease',
-                    '&:hover': {
-                      transform: 'scale(1.05)',
-                      color: colors.tan,
-                      border: `1px solid ${colors.tan}`,
-                    },
-                  }}
-                >
-                  {currentUser?.fullName?.charAt(0) || 'U'}
-                </Avatar>
-              </Box>
-            </Tooltip>
-
           {/*  Botón de Toggle de Tema Mejorado */}
           <Tooltip title={darkMode ? "Modo claro" : "Modo oscuro"}>
             <IconButton

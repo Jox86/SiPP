@@ -572,7 +572,7 @@ const Ayuda = () => {
     <Box sx={{ 
       p: isMobile ? 2 : 4,
       minHeight: '100vh',
-      backgroundColor: COLORS.swanWhite, // Cambiado
+      backgroundColor: COLORS.paper, 
       mt: 2
     }}>
       {/* Header */}

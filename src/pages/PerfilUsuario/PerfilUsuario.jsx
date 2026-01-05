@@ -37,6 +37,37 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import { useNotifications } from '../../context/NotificationContext';
 
+// Función para obtener iniciales del nombre completo
+const getInitials = (fullName) => {
+  if (!fullName || typeof fullName !== 'string' || fullName.trim() === '') {
+    return 'US'; // Default si no hay nombre
+  }
+  
+  const nameParts = fullName.trim().split(' ');
+  
+  if (nameParts.length === 1) {
+    // Si solo tiene un nombre, toma las dos primeras letras
+    return nameParts[0].substring(0, 2).toUpperCase();
+  }
+  
+  // Toma la primera letra del primer nombre y la primera letra del último apellido
+  const firstName = nameParts[0];
+  const lastName = nameParts[nameParts.length - 1];
+  
+  return (firstName[0] + lastName[0]).toUpperCase();
+};
+
+// Función alpha para transparencias
+const alpha = (color, opacity) => {
+  if (color.startsWith('#')) {
+    const r = parseInt(color.slice(1, 3), 16);
+    const g = parseInt(color.slice(3, 5), 16);
+    const b = parseInt(color.slice(5, 7), 16);
+    return `rgba(${r}, ${g}, ${b}, ${opacity})`;
+  }
+  return color;
+};
+
 const PerfilUsuario = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -44,7 +75,6 @@ const PerfilUsuario = () => {
   const { addNotification } = useNotifications();
 
   const [userData, setUserData] = useState(null);  
-
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
   
@@ -72,31 +102,31 @@ const PerfilUsuario = () => {
 
   // === FUNCIONES PARA CARGAR DATOS REALES ===
 
-// Cargar datos del usuario desde localStorage
-const loadUserData = useCallback(() => {
-  if (!currentUser) return;
+  // Cargar datos del usuario desde localStorage
+  const loadUserData = useCallback(() => {
+    if (!currentUser) return;
 
-  try {
-    // Obtener datos actualizados del usuario desde localStorage
-    const users = JSON.parse(localStorage.getItem('SiPP_users') || '[]');
-    const updatedUser = users.find(u => u.id === currentUser.id) || currentUser;
-    
-    // Solo establecer los datos, sin estado de edición
-    setUserData(updatedUser);
+    try {
+      // Obtener datos actualizados del usuario desde localStorage
+      const users = JSON.parse(localStorage.getItem('SiPP_users') || '[]');
+      const updatedUser = users.find(u => u.id === currentUser.id) || currentUser;
+      
+      // Solo establecer los datos, sin estado de edición
+      setUserData(updatedUser);
 
-    // Cargar proyectos del usuario
-    loadUserProjects(currentUser.id);
-    
-    // Cargar pedidos del usuario
-    loadUserOrders(currentUser.id);
-    
-    // Cargar mensajes del usuario
-    loadUserMessages(currentUser.id);
+      // Cargar proyectos del usuario
+      loadUserProjects(currentUser.id);
+      
+      // Cargar pedidos del usuario
+      loadUserOrders(currentUser.id);
+      
+      // Cargar mensajes del usuario
+      loadUserMessages(currentUser.id);
 
-  } catch (error) {
-    console.error('Error al cargar datos del usuario:', error);
-  }
-}, [currentUser]);
+    } catch (error) {
+      console.error('Error al cargar datos del usuario:', error);
+    }
+  }, [currentUser]);
 
   // Cargar proyectos del usuario
   const loadUserProjects = useCallback((userId) => {
@@ -112,7 +142,8 @@ const loadUserData = useCallback(() => {
       setUserStats(prev => ({
         ...prev,
         totalProjects: projects.length,
-        totalBudget: totalBudget
+        totalBudget: totalBudget,
+        remainingBudget: prev.totalBudget - prev.spentBudget // Actualizar también el restante
       }));
     } catch (error) {
       console.error('Error al cargar proyectos del usuario:', error);
@@ -169,15 +200,10 @@ const loadUserData = useCallback(() => {
 
   // Cargar datos iniciales
   useEffect(() => {
-    loadUserData();
-  }, [loadUserData]);
-
-  // === MANEJO DEL PERFIL ===
-
-  // Función para crear nuevo proyecto
-  const handleCreateNewProject = useCallback(() => {
-    window.location.href = '/proyectos?action=create';
-  }, []);
+    if (currentUser) {
+      loadUserData();
+    }
+  }, [currentUser, loadUserData]);
 
   // Calcular estadísticas de proyectos
   const projectStats = useMemo(() => {
@@ -192,13 +218,10 @@ const loadUserData = useCallback(() => {
   // Detectar si es admin o comercial
   const isAdminOrCommercial = ['admin', 'comercial'].includes(currentUser?.role);
 
-
-// Cargar datos iniciales
-useEffect(() => {
-  if (currentUser) {
-    loadUserData();
-  }
-}, [currentUser, loadUserData]);
+  // Obtener iniciales del usuario actual
+  const userInitials = useMemo(() => {
+    return getInitials(userData?.fullName || currentUser?.fullName || '');
+  }, [userData?.fullName, currentUser?.fullName]);
 
   return (
     <Box sx={{ p: isMobile ? 2 : 4, position: 'relative', marginTop: isMobile ? '10%' : 3 }}>
@@ -242,44 +265,43 @@ useEffect(() => {
                 </Tooltip>
               </Box>
               
-              {/* Sección de Avatar - SOLO LECTURA */}
+              {/* Sección de Avatar - SOLO INICIALES */}
               <Box sx={{ 
-  display: 'flex', 
-  alignItems: 'center', 
-  mb: 4, 
-  p: 2, 
-  backgroundColor: alpha(colors.tan, 0.1), 
-  borderRadius: 2 
-}}>
-  <Box sx={{ position: 'relative', display: 'inline-block', mr: 3 }}>
-    <Avatar
-      sx={{ 
-        width: 100, 
-        height: 100, 
-        backgroundColor: colors.borgundy,
-        color: colors.swanWhite,
-        fontWeight: 'bold',
-        fontSize: '2.5rem',
-        border: `4px solid ${colors.tan}`,
-      }}
-    >
-      {userData?.fullName ? userData.fullName.charAt(0).toUpperCase() : 'U'}
-    </Avatar>
-    {/* ELIMINAR completamente el input y botón de subir foto */}
-  </Box>
-  <Box>
-    <Typography variant="h6" gutterBottom sx={{ color: colors.borgundy }}>
-      {userData?.fullName || 'Nombre no disponible'}
-    </Typography>
-    <Typography variant="body2" color="text.secondary" gutterBottom>
-      {userData?.email || 'Email no disponible'}
-    </Typography>
-    <Typography variant="body2" color="text.secondary">
-      {userData?.role === 'admin' ? 'Administrador' : 
-       userData?.role === 'comercial' ? 'Usuario Comercial' : 'Jefe de Proyecto'}
-    </Typography>
-  </Box>
-</Box>
+                display: 'flex', 
+                alignItems: 'center', 
+                mb: 4, 
+                p: 2, 
+                backgroundColor: alpha(colors.tan, 0.1), 
+                borderRadius: 2 
+              }}>
+                <Box sx={{ position: 'relative', display: 'inline-block', mr: 3 }}>
+                  <Avatar
+                    sx={{ 
+                      width: 100, 
+                      height: 100, 
+                      backgroundColor: colors.borgundy,
+                      color: colors.swanWhite,
+                      fontWeight: 'bold',
+                      fontSize: '2.5rem',
+                      border: `4px solid ${colors.tan}`,
+                    }}
+                  >
+                    {userInitials}
+                  </Avatar>
+                </Box>
+                <Box>
+                  <Typography variant="h6" gutterBottom sx={{ color: colors.borgundy }}>
+                    {userData?.fullName || 'Nombre no disponible'}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" gutterBottom>
+                    {userData?.email || 'Email no disponible'}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {userData?.role === 'admin' ? 'Administrador' : 
+                     userData?.role === 'comercial' ? 'Usuario Comercial' : 'Jefe de Proyecto'}
+                  </Typography>
+                </Box>
+              </Box>
 
               {/* Campos de solo lectura */}
               <Grid container spacing={2}>
@@ -407,111 +429,8 @@ useEffect(() => {
             </CardContent>
           </Card>
 
-        <Grid container spacing={4}>
-          {/* Información del Sistema y Presupuesto */}
-          <Grid item xs={12} md={4}>
-            {/* Contenedor interno para las tarjetas lado a lado */}
-            <Grid container spacing={2}>
-              {/* Información del Sistema */}
-              <Grid item xs={12}>
-                <Card sx={{ 
-                  mt: 4,
-                  borderRadius: 3, 
-                  boxShadow: 3,
-                  background: `linear-gradient(135deg, ${colors.swanWhite} 0%, ${colors.shellstone}20 100%)`,
-                  width: 800,
-                }}>
-                  <CardContent>
-                    <Typography variant="h6" sx={{ color: colors.borgundy, fontWeight: 600, mb: 2 }}>
-                      Información del Sistema
-                    </Typography>
-                    
-                    <Stack spacing={1}>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <Typography variant="body2" color="text.secondary">Rol:</Typography>
-                        <Typography variant="body2" fontWeight="medium">
-                          {userData?.role === 'admin' ? 'Administrador' : 
-                          userData?.role === 'comercial' ? 'Comercial' : 'Jefe de Proyecto'}
-                        </Typography>
-                      </Box>
-                      
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <Typography variant="body2" color="text.secondary">Usuario desde:</Typography>
-                        <Typography variant="body2" fontWeight="medium">
-                          {userData?.createdAt ? new Date(userData.createdAt).toLocaleDateString() : 'N/A'}
-                        </Typography>
-                      </Box>
-                      
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <Typography variant="body2" color="text.secondary">Última actualización:</Typography>
-                        <Typography variant="body2" fontWeight="medium">
-                          {userData?.updatedAt ? new Date(userData.updatedAt).toLocaleDateString() : 'N/A'}
-                        </Typography>
-                      </Box>
-                    </Stack>
-                  </CardContent>
-                </Card>
-              </Grid>
-
-              {/* Tarjeta de Presupuesto - SOLO para usuarios comunes */}
-              {!isAdminOrCommercial && (
-                <Grid item xs={12}>
-                  <Card sx={{ 
-                    mt: 4,
-                    borderRadius: 3, 
-                    boxShadow: 3,
-                    background: `linear-gradient(135deg, ${colors.swanWhite} 0%, ${colors.shellstone}20 100%)`,
-                    width: 300,
-                  }}>
-                      <Paper sx={{ 
-                        p: 1, 
-                        textAlign: 'center',
-                        backgroundColor: alpha('#4caf50', 0.1),
-                        border: `1px solid ${alpha('#4caf50', 0.2)}`,
-                        borderRadius: 2
-                      }}>
-                        <AttachMoneyIcon sx={{ fontSize: 40, color: '#4caf50', mb: 1 }} />
-                        <Typography variant="h6" fontWeight="bold" color="#4caf50">
-                          ${userStats.remainingBudget.toLocaleString()}
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                          Presupuesto Restante
-                        </Typography>
-                        
-                        {/* Barra de progreso CORREGIDA - Verde para gastado, Tan para restante */}
-                        <LinearProgress 
-                          variant="determinate" 
-                          value={
-                            userStats.totalBudget > 0 
-                              ? Math.max((userStats.spentBudget / userStats.totalBudget) * 100, 1) // Mínimo 1% para que sea visible
-                              : 0
-                          }
-                          sx={{ 
-                            mt: 1,
-                            height: 8,
-                            borderRadius: 4,
-                            backgroundColor: alpha(colors.tan, 0.3),
-                            '& .MuiLinearProgress-bar': {
-                              backgroundColor: '#4caf50',
-                              borderRadius: 4,
-                              transition: 'all 0.3s ease'
-                            }
-                          }}
-                        />
-
-                        <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
-                          Gastado: ${userStats.spentBudget.toLocaleString()} / ${userStats.totalBudget.toLocaleString()}
-                        </Typography>
-                      </Paper>
-                  </Card>
-                </Grid>
-              )}
-            </Grid>
-          </Grid>
-        </Grid>
-
           {/* Sección de Proyectos del Usuario - SOLO para usuarios comunes */}
-          {!isAdminOrCommercial && (
+          {!isAdminOrCommercial && userProjects.length > 0 && (
             <Card sx={{ 
               mt: 4, 
               borderRadius: 3, 
@@ -522,6 +441,9 @@ useEffect(() => {
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
                   <Typography variant="h6" sx={{ color: colors.borgundy, fontWeight: 600 }}>
                     Mis Proyectos
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Mostrando {Math.min(userProjects.length, 5)} de {userProjects.length} proyectos
                   </Typography>
                 </Box>
 
@@ -561,86 +483,181 @@ useEffect(() => {
                   />
                 </Box>
 
-                {userProjects.length === 0 ? (
-                  <Alert severity="info" sx={{ mt: 2 }}>
-                    No tienes proyectos asignados. 
-                  </Alert>
-                ) : (
-                  <Stack spacing={2}>
-                    {userProjects.slice(0, 5).map((project) => (
-                      <Paper 
-                        key={project.id} 
-                        sx={{ 
-                          p: 2, 
-                          border: '2px solid',
-                          borderColor: alpha(colors.borgundy, 0.1),
-                          borderRadius: 2,
-                          transition: 'all 0.3s ease',
-                          '&:hover': {
-                            borderColor: colors.borgundy,
-                            transform: 'translateY(-2px)',
-                            boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
-                          }
-                        }}
-                      >
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                          <Box sx={{ flex: 1 }}>
-                            <Typography variant="subtitle1" fontWeight="bold" sx={{ color: colors.borgundy }}>
-                              {project.costCenter} - {project.projectNumber}
-                            </Typography>
-                            <Typography variant="body2" color="text.secondary">
-                              {project.name}
-                            </Typography>
-                            <Typography variant="caption" color="text.secondary">
-                              {project.area} • ${project.budget?.toLocaleString()} CUP
-                            </Typography>
-                          </Box>
-                          <Chip
-                            label={project.status === 'active' ? 'Activo' : project.status === 'completed' ? 'Completado' : 'En pausa'}
-                            size="small"
-                            sx={{
-                              backgroundColor: 
-                                project.status === 'active' ? '#4caf50' : 
-                                project.status === 'completed' ? colors.sapphire : colors.tan,
-                              color: 'white',
-                              fontWeight: 600
-                            }}
-                          />
-                        </Box>
-                        {project.description && (
-                          <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-                            {project.description.length > 100 
-                              ? `${project.description.substring(0, 100)}...` 
-                              : project.description}
+                <Stack spacing={2}>
+                  {userProjects.slice(0, 5).map((project) => (
+                    <Paper 
+                      key={project.id} 
+                      sx={{ 
+                        p: 2, 
+                        border: '2px solid',
+                        borderColor: alpha(colors.borgundy, 0.1),
+                        borderRadius: 2,
+                        transition: 'all 0.3s ease',
+                        '&:hover': {
+                          borderColor: colors.borgundy,
+                          transform: 'translateY(-2px)',
+                          boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+                        }
+                      }}
+                    >
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <Box sx={{ flex: 1 }}>
+                          <Typography variant="subtitle1" fontWeight="bold" sx={{ color: colors.borgundy }}>
+                            {project.costCenter} - {project.projectNumber}
                           </Typography>
-                        )}
-                      </Paper>
-                    ))}
-                    {userProjects.length > 5 && (
-                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textAlign: 'center', mt: 1 }}>
-                        Y {userProjects.length - 5} proyectos más...
-                      </Typography>
-                    )}
-                  </Stack>
-                )}
+                          <Typography variant="body2" color="text.secondary">
+                            {project.name}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {project.area} • ${project.budget?.toLocaleString()} CUP
+                          </Typography>
+                        </Box>
+                        <Chip
+                          label={project.status === 'active' ? 'Activo' : project.status === 'completed' ? 'Completado' : 'En pausa'}
+                          size="small"
+                          sx={{
+                            backgroundColor: 
+                              project.status === 'active' ? '#4caf50' : 
+                              project.status === 'completed' ? colors.sapphire : colors.tan,
+                            color: 'white',
+                            fontWeight: 600
+                          }}
+                        />
+                      </Box>
+                      {project.description && (
+                        <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                          {project.description.length > 100 
+                            ? `${project.description.substring(0, 100)}...` 
+                            : project.description}
+                        </Typography>
+                      )}
+                    </Paper>
+                  ))}
+                  {userProjects.length > 5 && (
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textAlign: 'center', mt: 1 }}>
+                      Y {userProjects.length - 5} proyectos más...
+                    </Typography>
+                  )}
+                </Stack>
               </CardContent>
             </Card>
           )}
         </Grid>
+
+        {/* Columna derecha - Información del Sistema y Presupuesto */}
+        <Grid item xs={12} md={4}>
+          <Stack spacing={4}>
+            {/* Información del Sistema */}
+            <Card sx={{ 
+              borderRadius: 3, 
+              boxShadow: 3,
+              background: `linear-gradient(135deg, ${colors.swanWhite} 0%, ${colors.shellstone}20 100%)`,
+            }}>
+              <CardContent>
+                <Typography variant="h6" sx={{ color: colors.borgundy, fontWeight: 600, mb: 2 }}>
+                  Información del Sistema
+                </Typography>
+                
+                <Stack spacing={1}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <Typography variant="body2" color="text.secondary">Rol:</Typography>
+                    <Typography variant="body2" fontWeight="medium">
+                      {userData?.role === 'admin' ? 'Administrador' : 
+                      userData?.role === 'comercial' ? 'Comercial' : 'Jefe de Proyecto'}
+                    </Typography>
+                  </Box>
+                  
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <Typography variant="body2" color="text.secondary">Usuario desde:</Typography>
+                    <Typography variant="body2" fontWeight="medium">
+                      {userData?.createdAt ? new Date(userData.createdAt).toLocaleDateString() : 'N/A'}
+                    </Typography>
+                  </Box>
+                  
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <Typography variant="body2" color="text.secondary">Última actualización:</Typography>
+                    <Typography variant="body2" fontWeight="medium">
+                      {userData?.updatedAt ? new Date(userData.updatedAt).toLocaleDateString() : 'N/A'}
+                    </Typography>
+                  </Box>
+                </Stack>
+              </CardContent>
+            </Card>
+
+            {/* Tarjeta de Presupuesto - SOLO para usuarios comunes */}
+            {!isAdminOrCommercial && userStats.totalBudget > 0 && (
+              <Card sx={{ 
+                borderRadius: 3, 
+                boxShadow: 3,
+                background: `linear-gradient(135deg, ${colors.swanWhite} 0%, ${colors.shellstone}20 100%)`,
+              }}>
+                <CardContent>
+                  <Typography variant="h6" sx={{ color: colors.borgundy, fontWeight: 600, mb: 2 }}>
+                    Presupuesto
+                  </Typography>
+                  
+                  <Paper sx={{ 
+                    p: 2, 
+                    textAlign: 'center',
+                    backgroundColor: alpha('#4caf50', 0.1),
+                    border: `1px solid ${alpha('#4caf50', 0.2)}`,
+                    borderRadius: 2
+                  }}>
+                    <AttachMoneyIcon sx={{ fontSize: 40, color: '#4caf50', mb: 1 }} />
+                    <Typography variant="h5" fontWeight="bold" color="#4caf50">
+                      ${userStats.remainingBudget.toLocaleString()}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                      Presupuesto Restante
+                    </Typography>
+                    
+                    {/* Barra de progreso */}
+                    <LinearProgress 
+                      variant="determinate" 
+                      value={
+                        userStats.totalBudget > 0 
+                          ? Math.max((userStats.spentBudget / userStats.totalBudget) * 100, 1)
+                          : 0
+                      }
+                      sx={{ 
+                        mb: 1,
+                        height: 8,
+                        borderRadius: 4,
+                        backgroundColor: alpha(colors.tan, 0.3),
+                        '& .MuiLinearProgress-bar': {
+                          backgroundColor: '#4caf50',
+                          borderRadius: 4,
+                          transition: 'all 0.3s ease'
+                        }
+                      }}
+                    />
+
+                    <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+                      Gastado: ${userStats.spentBudget.toLocaleString()} / ${userStats.totalBudget.toLocaleString()}
+                    </Typography>
+                    
+                    {/* Información adicional */}
+                    <Box sx={{ mt: 2, pt: 2, borderTop: `1px solid ${alpha('#4caf50', 0.1)}` }}>
+                      <Stack spacing={1}>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <Typography variant="caption" color="text.secondary">Proyectos:</Typography>
+                          <Typography variant="caption" fontWeight="medium">{userStats.totalProjects}</Typography>
+                        </Box>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <Typography variant="caption" color="text.secondary">Pedidos:</Typography>
+                          <Typography variant="caption" fontWeight="medium">{userStats.totalOrders}</Typography>
+                        </Box>
+                      </Stack>
+                    </Box>
+                  </Paper>
+                </CardContent>
+              </Card>
+            )}
+          </Stack>
+        </Grid>
       </Grid>
     </Box>
   );
-};
-
-// Función alpha para transparencias
-const alpha = (color, opacity) => {
-  if (color.startsWith('#')) {
-    const r = parseInt(color.slice(1, 3), 16);
-    const g = parseInt(color.slice(3, 5), 16);
-    const b = parseInt(color.slice(5, 7), 16);
-    return `rgba(${r}, ${g}, ${b}, ${opacity})`;
-  }
-  return color;
 };
 
 export default PerfilUsuario;

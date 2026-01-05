@@ -1584,7 +1584,7 @@ const renderStatsCards = () => (
   return (
     <Box sx={{ 
       p: isMobile ? 1 : 2,
-      backgroundColor: currentColors.swanWhite,
+      backgroundColor: currentColors.paper,
       minHeight: '100vh',
       overflowX: 'hidden',
       marginLeft: `${sidebarMargin}px`,

@@ -574,7 +574,7 @@ const canManageProject = (project) => {
   return (
     <Box sx={{ 
       p: isMobile ? 2 : 4,
-      backgroundColor: colors.swanWhite,
+      backgroundColor: colors.paper,
       minHeight: '100vh',
       marginTop: isMobile ? '10%' : 3, 
     }}>

@@ -173,173 +173,295 @@ const getDateRange = (period) => {
 };
 
 // Función para generar acta profesional
+// REEMPLAZAR completamente la función generateProfessionalConformity en Reportes.js:
+
+// Función para generar acta profesional - VERSIÓN CORREGIDA
 const generateProfessionalConformity = (data) => {
-  if (!data) return;
+  if (!data) {
+    addNotification({
+      title: 'Error',
+      message: 'No hay datos para generar el acta',
+      type: 'error'
+    });
+    return;
+  }
 
-  const doc = new jsPDF();
-  const pageWidth = doc.internal.pageSize.getWidth();
-  const marginLeft = 25;
-  const marginRight = 25;
-  const marginTop = 30;
-  
-  let y = marginTop;
-  let currentPage = 1;
+  try {
+    console.log('📄 Generando acta de conformidad:', data);
+    
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const marginLeft = 25;
+    const marginRight = 25;
+    const marginTop = 30;
+    
+    let y = marginTop;
+    let currentPage = 1;
 
-  // Encabezado
-  const addHeader = () => {
+    // Encabezado
+    const addHeader = () => {
+      doc.setFontSize(10);
+      doc.setTextColor(100, 100, 100);
+      doc.text('UNIVERSIDAD DE LA HABANA', marginLeft, 15);
+      
+      doc.setFontSize(12);
+      doc.setTextColor(40, 40, 40);
+      doc.text(DEPARTAMENTO_NOMBRE, pageWidth / 2, 27, { align: 'center' });
+      
+      doc.setDrawColor(78, 1, 1);
+      doc.setLineWidth(0.5);
+      doc.line(marginLeft, 32, pageWidth - marginRight, 32);
+    };
+
+    // Pie de página
+    const addFooter = () => {
+      const footerY = doc.internal.pageSize.getHeight() - 15;
+      doc.setFontSize(8);
+      doc.setTextColor(100, 100, 100);
+      doc.text(`Página ${currentPage}`, pageWidth / 2, footerY, { align: 'center' });
+      doc.text('Documento generado automáticamente por el Sistema SiPP', pageWidth / 2, footerY + 6, { align: 'center' });
+    };
+
+    const checkNewPage = (requiredSpace = 20) => {
+      if (y + requiredSpace > doc.internal.pageSize.getHeight() - 30) {
+        addFooter();
+        doc.addPage();
+        currentPage++;
+        y = marginTop;
+        addHeader();
+        return true;
+      }
+      return false;
+    };
+
+    // Encabezado inicial
+    addHeader();
+    y = marginTop + 15;
+
+    // Título
+    doc.setFontSize(16);
+    doc.setTextColor(78, 1, 1);
+    doc.text('ACTA DE CONFORMIDAD OFICIAL', pageWidth / 2, y, { align: 'center' });
+    y += 12;
+
+    // Código y fecha
     doc.setFontSize(10);
     doc.setTextColor(100, 100, 100);
-    doc.text('UNIVERSIDAD DE LA HABANA', marginLeft, 15);
+    const docCode = `AC-DST-${new Date().getFullYear()}-${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`;
     
-    doc.setFontSize(12);
-    doc.setTextColor(40, 40, 40);
-    doc.text(DEPARTAMENTO_NOMBRE, pageWidth / 2, 27, { align: 'center' });
+    doc.text(`Código: ${docCode}`, marginLeft, y);
+    doc.text(`Fecha: ${new Date().toLocaleDateString('es-ES')}`, pageWidth - marginRight, y, { align: 'right' });
+    y += 20;
+
+    // Datos del proyecto
+    doc.setFontSize(11);
+    doc.setTextColor(0, 0, 0);
     
-    doc.setDrawColor(78, 1, 1);
-    doc.setLineWidth(0.5);
-    doc.line(marginLeft, 32, pageWidth - marginRight, 32);
-  };
-
-  // Pie de página
-  const addFooter = () => {
-    const footerY = doc.internal.pageSize.getHeight() - 15;
-    doc.setFontSize(8);
-    doc.setTextColor(100, 100, 100);
-    doc.text(`Página ${currentPage}`, pageWidth / 2, footerY, { align: 'center' });
-  };
-
-  const checkNewPage = (requiredSpace = 20) => {
-    if (y + requiredSpace > doc.internal.pageSize.getHeight() - 30) {
-      addFooter();
-      doc.addPage();
-      currentPage++;
-      y = marginTop;
-      addHeader();
-      return true;
-    }
-    return false;
-  };
-
-  // Agregar encabezado inicial
-  addHeader();
-  y = marginTop + 15;
-
-  // Título
-  doc.setFontSize(16);
-  doc.setTextColor(78, 1, 1);
-  doc.text('ACTA DE CONFORMIDAD OFICIAL', pageWidth / 2, y, { align: 'center' });
-  y += 12;
-
-  // Código y fecha
-  doc.setFontSize(10);
-  doc.setTextColor(100, 100, 100);
-  const docCode = `AC-DST-${new Date().getFullYear()}-${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`;
-  
-  doc.text(`Código: ${docCode}`, marginLeft, y);
-  doc.text(`Fecha: ${new Date().toLocaleDateString('es-ES')}`, pageWidth - marginRight, y, { align: 'right' });
-  y += 20;
-
-  // Texto específico para actas de conformidad
-  const actaText = [
-    `ACTA DE CONFORMIDAD OFICIAL`,
-    ``,
-    `Por medio del presente documento, el ${DEPARTAMENTO_NOMBRE} hace constar que ha completado`,
-    `satisfactoriamente el pedido asociado al proyecto "${data.project}" solicitado por ${data.client}.`,
-    ``,
-    `El usuario ${data.client} manifiesta su completa conformidad con los productos y/o servicios recibidos,`,
-    `reconociendo que han sido entregados de acuerdo a las especificaciones solicitadas y dentro`,
-    `de los parámetros de calidad establecidos por el departamento.`,
-    ``,
-    `Se certifica que todos los items han sido revisados y aceptados conforme a los estándares`,
-    `técnicos requeridos, cumpliendo con las expectativas del solicitante y los procedimientos`,
-    `establecidos por la Dirección de Servicios Tecnológicos.`,
-    ``,
-    `El ${DEPARTAMENTO_NOMBRE} reafirma su compromiso con la calidad y la satisfacción del usuario,`,
-    `garantizando que los productos y servicios entregados responden a las necesidades específicas`,
-    `del proyecto y contribuyen al cumplimiento de los objetivos institucionales.`,
-    ``,
-    `Se detallan a continuación los items entregados y los montos correspondientes:`
-  ];
-  
-  actaText.forEach(line => {
-    checkNewPage(7);
-    if (line === '') {
-      y += 4;
-    } else if (line.includes('ACTA DE CONFORMIDAD')) {
-      doc.setFont(undefined, 'bold');
-      doc.text(line, marginLeft, y, { maxWidth: pageWidth - marginLeft - marginRight });
-      doc.setFont(undefined, 'normal');
-      y += 8;
-    } else {
-      doc.text(line, marginLeft, y, { maxWidth: pageWidth - marginLeft - marginRight });
-      y += 6;
-    }
-  });
-  y += 15;
-
-  // Tabla de datos
-  if (data.items && data.items.length > 0) {
-    checkNewPage(50);
+    const projectData = [
+      `ACTA DE CONFORMIDAD OFICIAL`,
+      ``,
+      `Por medio del presente documento, el ${DEPARTAMENTO_NOMBRE} hace constar que ha completado`,
+      `satisfactoriamente el pedido asociado al proyecto:`,
+      ``,
+      `PROYECTO: ${data.project || 'No especificado'}`,
+      `SOLICITANTE: ${data.client || 'No especificado'}`,
+      `FECHA DE ENTREGA: ${data.date || new Date().toLocaleDateString('es-ES')}`,
+      ``,
+      `El usuario ${data.client || 'Solicitante'} manifiesta su completa conformidad con los productos`,
+      `y/o servicios recibidos, reconociendo que han sido entregados de acuerdo a las`,
+      `especificaciones solicitadas y dentro de los parámetros de calidad establecidos.`,
+      ``,
+      `Se certifica que todos los items han sido revisados y aceptados conforme a los estándares`,
+      `técnicos requeridos, cumpliendo con las expectativas del solicitante.`,
+      ``,
+      `Items entregados:`
+    ];
     
-    const tableHead = [['No.', 'Descripción', 'Cant.', 'Precio Unit. (CUP)', 'Total (CUP)']];
-    const tableBody = data.items.map((item, i) => [
-      (i + 1).toString(),
-      item.name || item.service || 'Servicio/Producto',
-      (item.quantity || 1).toString(),
-      `$${(item.price || 0).toFixed(2)}`,
-      `$${((item.price || 0) * (item.quantity || 1)).toFixed(2)}`
-    ]);
-
-    doc.autoTable({
-      head: tableHead,
-      body: tableBody,
-      startY: y,
-      theme: 'grid',
-      styles: { 
-        fontSize: 9,
-        cellPadding: 3,
-        textColor: [0, 0, 0]
-      },
-      headStyles: { 
-        fillColor: [78, 1, 1], 
-        textColor: [255, 255, 255],
-        fontStyle: 'bold',
-        halign: 'center'
-      },
-      margin: { left: marginLeft, right: marginRight }
+    projectData.forEach(line => {
+      checkNewPage(7);
+      if (line === '') {
+        y += 4;
+      } else if (line.includes('ACTA DE CONFORMIDAD')) {
+        doc.setFont('helvetica', 'bold');
+        doc.text(line, marginLeft, y, { maxWidth: pageWidth - marginLeft - marginRight });
+        doc.setFont('helvetica', 'normal');
+        y += 8;
+      } else {
+        doc.text(line, marginLeft, y, { maxWidth: pageWidth - marginLeft - marginRight });
+        y += 6;
+      }
     });
     
-    y = doc.lastAutoTable.finalY + 15;
+    y += 10;
+
+    // Tabla de items (si existen)
+    if (data.items && data.items.length > 0) {
+      checkNewPage(50);
+      
+      const tableHead = [['No.', 'Descripción', 'Cant.', 'Precio Unit. (CUP)', 'Total (CUP)']];
+      const tableBody = data.items.map((item, i) => [
+        (i + 1).toString(),
+        item.name || item.service || 'Servicio/Producto',
+        (item.quantity || 1).toString(),
+        `$${(item.price || 0).toFixed(2)}`,
+        `$${((item.price || 0) * (item.quantity || 1)).toFixed(2)}`
+      ]);
+
+      // Fila de total
+      const total = data.items.reduce((sum, item) => sum + ((item.price || 0) * (item.quantity || 1)), 0);
+      tableBody.push(['', '', '', 'TOTAL:', `$${total.toFixed(2)}`]);
+
+      try {
+        doc.autoTable({
+          head: tableHead,
+          body: tableBody,
+          startY: y,
+          theme: 'grid',
+          styles: { 
+            fontSize: 9,
+            cellPadding: 3,
+            textColor: [0, 0, 0]
+          },
+          headStyles: { 
+            fillColor: [78, 1, 1], 
+            textColor: [255, 255, 255],
+            fontStyle: 'bold',
+            halign: 'center'
+          },
+          margin: { left: marginLeft, right: marginRight }
+        });
+        
+        y = doc.lastAutoTable.finalY + 15;
+      } catch (tableError) {
+        console.error('Error generando tabla:', tableError);
+        y += 10;
+      }
+    } else {
+      checkNewPage(10);
+      doc.text('No hay items especificados', marginLeft, y);
+      y += 15;
+    }
+
+    // Notas adicionales (si existen)
+    if (data.notes) {
+      checkNewPage(20);
+      doc.setFont('helvetica', 'bold');
+      doc.text('NOTAS ADICIONALES:', marginLeft, y);
+      y += 8;
+      
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(10);
+      doc.text(data.notes, marginLeft, y, { maxWidth: pageWidth - marginLeft - marginRight });
+      y += 20;
+    }
+
+    // Firmas
+    checkNewPage(40);
+    
+    // Línea para firma del solicitante
+    doc.setDrawColor(0, 0, 0);
+    doc.setLineWidth(0.5);
+    doc.line(marginLeft, y, marginLeft + 120, y);
+    
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.text(data.client || 'Solicitante', marginLeft + 60, y + 10, { align: 'center' });
+    
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.text('Usuario Solicitante', marginLeft + 60, y + 15, { align: 'center' });
+    
+    // Línea para firma del director
+    doc.setDrawColor(0, 0, 0);
+    doc.line(pageWidth - marginRight - 120, y, pageWidth - marginRight, y);
+    
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.text(DIRECTOR_NOMBRE, pageWidth - marginRight - 60, y + 10, { align: 'center' });
+    
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.text(DIRECTOR_CARGO, pageWidth - marginRight - 60, y + 15, { align: 'center' });
+    doc.text(DEPARTAMENTO_NOMBRE, pageWidth - marginRight - 60, y + 20, { align: 'center' });
+
+    // Pie de página final
+    addFooter();
+    
+    const fileName = `ACTA_CONFORMIDAD_${(data.project || 'Proyecto').replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
+    console.log('💾 Guardando acta como:', fileName);
+    
+    doc.save(fileName);
+    
+    addNotification({
+      title: 'Acta generada',
+      message: 'El acta de conformidad se ha descargado exitosamente',
+      type: 'success'
+    });
+    
+  } catch (error) {
+    console.error('❌ Error generando acta:', error);
+    
+    addNotification({
+      title: 'Error',
+      message: 'No se pudo generar el acta de conformidad',
+      type: 'error'
+    });
+    
+    // Intentar con PDF simple
+    try {
+      const emergencyDoc = new jsPDF();
+      emergencyDoc.setFontSize(16);
+      emergencyDoc.text('ACTA DE CONFORMIDAD', 20, 20);
+      emergencyDoc.setFontSize(12);
+      emergencyDoc.text(`Proyecto: ${data.project || 'No especificado'}`, 20, 40);
+      emergencyDoc.text(`Solicitante: ${data.client || 'No especificado'}`, 20, 50);
+      emergencyDoc.save('ACTA_EMERGENCIA.pdf');
+    } catch (e) {
+      console.error('Error incluso en generación de emergencia:', e);
+    }
   }
+};
 
-  // Total
-  if (data.total) {
-    checkNewPage(10);
-    doc.setFontSize(11);
-    doc.setFont(undefined, 'bold');
-    doc.text(`TOTAL GENERAL: $${data.total.toFixed(2)} CUP`, pageWidth - marginRight, y, { align: 'right' });
-    y += 20;
+const generateSimpleIndividualPDF = (orderData) => {
+  try {
+    const doc = new jsPDF();
+    
+    doc.setFontSize(16);
+    doc.setTextColor(78, 1, 1);
+    doc.text('REPORTE INDIVIDUAL', 20, 20);
+    
+    doc.setFontSize(12);
+    doc.setTextColor(0, 0, 0);
+    
+    const details = [
+      `Usuario: ${orderData.user || 'N/A'}`,
+      `Proyecto: ${!orderData.projectId || orderData.projectId === 'extra' ? 'Pedido Extra' : getProjectName(orderData.projectId, orderData.userId)}`,
+      `Fecha: ${new Date(orderData.date).toLocaleDateString('es-ES')}`,
+      `Tipo: ${orderData.orderType || getOrderType(orderData)}`,
+      `Estado: ${orderData.status || 'Pendiente'}`,
+      `Total: $${(orderData.total || 0).toFixed(2)} CUP`
+    ];
+    
+    let y = 40;
+    details.forEach(detail => {
+      doc.text(detail, 20, y);
+      y += 10;
+    });
+    
+    const fileName = `Reporte_Individual_${orderData.id || Date.now()}.pdf`;
+    doc.save(fileName);
+    
+    addNotification({
+      title: 'Reporte generado',
+      message: 'El PDF se ha descargado (versión simple)',
+      type: 'info'
+    });
+    
+    return true;
+  } catch (error) {
+    console.error('Error generando PDF simple:', error);
+    return false;
   }
-
-  // Firmas
-  checkNewPage(30);
-  doc.setDrawColor(0, 0, 0);
-  doc.line(marginLeft + 50, y, marginLeft + 150, y);
-  
-  doc.setFontSize(10);
-  doc.setFont(undefined, 'bold');
-  doc.text(DIRECTOR_NOMBRE, marginLeft + 100, y + 10, { align: 'center' });
-  
-  doc.setFont(undefined, 'normal');
-  doc.setFontSize(9);
-  doc.text(DIRECTOR_CARGO, marginLeft + 100, y + 15, { align: 'center' });
-  doc.text(DEPARTAMENTO_NOMBRE, marginLeft + 100, y + 20, { align: 'center' });
-
-  // Pie de página final
-  addFooter();
-  
-  const fileName = `ACTA_CONFORMIDAD_${data.project?.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
-  doc.save(fileName);
 };
 
 export default function Reportes() {
@@ -604,87 +726,77 @@ export default function Reportes() {
     };
   }, [allDataForCharts]);
 
-// REEMPLAZAR la función generateGeneralReport completa:
-const generateGeneralReport = () => {
-  try {
-    console.log('🔄 Generando reporte general...', { 
-      totalPedidos: allDataForCharts.length,
-      datos: allDataForCharts 
-    });
+  const generateGeneralReport = () => {
+    try {
+      console.log('🔄 Generando reporte general...', { 
+        totalPedidos: allDataForCharts.length,
+        datos: allDataForCharts 
+      });
 
-    const totalAmount = allDataForCharts.reduce((sum, p) => sum + (p.total || 0), 0);
-    
-    const reportData = {
-      period: monthFilter 
-        ? `Mes: ${new Date(monthFilter).toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })}`
-        : reportPeriod !== 'all' 
-          ? `Período: ${reportPeriod === 'week' ? 'Última Semana' : reportPeriod === 'month' ? 'Último Mes' : 'Último Año'}`
-          : 'Todos los períodos',
-      stats: {
-        totalRequests: allDataForCharts.length,
-        regularRequests: filteredPurchases.length,
-        extraRequests: filteredOrders.length,
-        totalAmount: totalAmount,
-        activeUsers: new Set(allDataForCharts.map(p => p.userId)).size,
-        projectsCount: new Set(allDataForCharts.map(p => p.projectId)).size
-      },
-      tableData: {
-        head: [['No.', 'Usuario', 'Proyecto', 'Fecha', 'Tipo', 'Total (CUP)']],
-        body: allDataForCharts.map((p, i) => [
-          (i + 1).toString(),
-          p.user || 'N/A',
-          !p.projectId || p.projectId === 'extra' ? 'Pedido Extra' : getProjectName(p.projectId, p.userId),
-          new Date(p.date).toLocaleDateString('es-ES'),
-          p.orderType || getOrderType(p),
-          `$${(p.total || 0).toFixed(2)}`
-        ])
-      },
-      filters: {
-        user: selectedUser ? getUserName(selectedUser) : 'Todos',
-        project: selectedProject ? getProjectName(selectedProject, selectedUser) : 'Todos',
-        month: monthFilter ? new Date(monthFilter).toLocaleDateString('es-ES', { month: 'long', year: 'numeric' }) : 'Todos',
-        period: reportPeriod !== 'all' 
-          ? (reportPeriod === 'week' ? 'Última Semana' : reportPeriod === 'month' ? 'Último Mes' : 'Último Año')
-          : 'Todos'
+      const totalAmount = allDataForCharts.reduce((sum, p) => sum + (p.total || 0), 0);
+      
+      const reportData = {
+        period: monthFilter 
+          ? `Mes: ${new Date(monthFilter).toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })}`
+          : reportPeriod !== 'all' 
+            ? `Período: ${reportPeriod === 'week' ? 'Última Semana' : reportPeriod === 'month' ? 'Último Mes' : 'Último Año'}`
+            : 'Todos los períodos',
+        stats: {
+          totalRequests: allDataForCharts.length,
+          regularRequests: filteredPurchases.length,
+          extraRequests: filteredOrders.length,
+          totalAmount: totalAmount,
+          activeUsers: new Set(allDataForCharts.map(p => p.userId)).size,
+          projectsCount: new Set(allDataForCharts.map(p => p.projectId)).size
+        },
+        tableData: {
+          head: [['No.', 'Usuario', 'Proyecto', 'Fecha', 'Tipo', 'Total (CUP)']],
+          body: allDataForCharts.map((p, i) => [
+            (i + 1).toString(),
+            p.user || 'N/A',
+            !p.projectId || p.projectId === 'extra' ? 'Pedido Extra' : getProjectName(p.projectId, p.userId),
+            new Date(p.date).toLocaleDateString('es-ES'),
+            p.orderType || getOrderType(p),
+            `$${(p.total || 0).toFixed(2)}`
+          ])
+        },
+        filters: {
+          user: selectedUser ? getUserName(selectedUser) : 'Todos',
+          project: selectedProject ? getProjectName(selectedProject, selectedUser) : 'Todos',
+          month: monthFilter ? new Date(monthFilter).toLocaleDateString('es-ES', { month: 'long', year: 'numeric' }) : 'Todos',
+          period: reportPeriod !== 'all' 
+            ? (reportPeriod === 'week' ? 'Última Semana' : reportPeriod === 'month' ? 'Último Mes' : 'Último Año')
+            : 'Todos'
+        }
+      };
+
+      console.log('📊 Datos para PDF general:', reportData);
+
+      // Verificar si la función importada existe
+      if (typeof generateProfessionalReportPDF === 'function') {
+        console.log('✅ Usando generateProfessionalReportPDF');
+        generateProfessionalReportPDF(reportData);
+      } else {
+        console.warn('⚠️ generateProfessionalReportPDF no está disponible, usando fallback');
+        const success = fallbackPDFGenerator(reportData, 'general');
+        if (!success) {
+          addNotification({
+            title: 'Error al generar PDF',
+            message: 'No se pudo generar el reporte general',
+            type: 'error'
+          });
+        }
       }
-    };
 
-    console.log('📊 Datos para PDF general:', reportData);
-
-    //  Verificar que la función existe y llamarla correctamente
-    // ACTUALIZAR las funciones principales para usar el respaldo:
-
-// En generateGeneralReport, reemplazar la llamada:
-if (typeof generateProfessionalReportPDF === 'function') {
-  generateProfessionalReportPDF(reportData);
-} else {
-  console.warn('⚠️ Usando generador de respaldo para reporte general');
-  const success = fallbackPDFGenerator(reportData, 'general');
-  if (!success) {
-    throw new Error('No se pudo generar el PDF con ninguna método disponible');
-  }
-}
-
-// En generateSelectedOrdersReport, reemplazar la llamada:
-if (typeof generateSelectedOrdersReportPDF === 'function') {
-  generateSelectedOrdersReportPDF(reportData);
-} else {
-  console.warn('⚠️ Usando generador de respaldo para reporte seleccionado');
-  const success = fallbackPDFGenerator(reportData, 'seleccionado');
-  if (!success) {
-    throw new Error('No se pudo generar el PDF con ninguna método disponible');
-  }
-}
-
-  } catch (error) {
-    console.error('❌ Error generando reporte general:', error);
-    addNotification({
-      title: 'Error al generar PDF',
-      message: 'No se pudo generar el reporte general. Verifica la consola para más detalles.',
-      type: 'error'
-    });
-  }
-};
+    } catch (error) {
+      console.error('❌ Error generando reporte general:', error);
+      addNotification({
+        title: 'Error al generar PDF',
+        message: 'No se pudo generar el reporte general. Verifica la consola para más detalles.',
+        type: 'error'
+      });
+    }
+  };
 
 // REEMPLAZAR completamente la función generateSelectedOrdersReport:
 const generateSelectedOrdersReport = () => {
@@ -774,10 +886,101 @@ const generateSelectedOrdersReport = () => {
 };
 
 
-//DEBUG--------------------
+ const generateSelectedOrdersReportPDF = (data) => {
+  try {
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const margin = 20;
+    let y = 30;
 
+    // Función para convertir HEX a RGB
+    const hexToRgb = (hex) => {
+      const cleanedHex = hex.replace('#', '');
+      const bigint = parseInt(cleanedHex, 16);
+      const r = (bigint >> 16) & 255;
+      const g = (bigint >> 8) & 255;
+      const b = bigint & 255;
+      return [r, g, b];
+    };
 
-// AGREGAR esta función después de los imports para debug
+    // Encabezado
+    doc.setFontSize(10);
+    doc.setTextColor(100, 100, 100);
+    doc.text('UNIVERSIDAD DE LA HABANA', margin, 15);
+    
+    doc.setFontSize(12);
+    doc.setTextColor(...hexToRgb(COLORS.borgundy));
+    doc.text(DATOS_INSTITUCIONALES.departamento, pageWidth / 2, 25, { align: 'center' });
+    
+    doc.setDrawColor(...hexToRgb(COLORS.borgundy));
+    doc.setLineWidth(0.5);
+    doc.line(margin, 32, pageWidth - margin, 32);
+
+    // Título
+    y = 45;
+    doc.setFontSize(16);
+    doc.setTextColor(...hexToRgb(COLORS.borgundy));
+    doc.text('REPORTE DE PEDIDOS SELECCIONADOS', pageWidth / 2, y, { align: 'center' });
+    y += 15;
+
+    // Información
+    doc.setFontSize(10);
+    doc.setTextColor(100, 100, 100);
+    doc.text(`Pedidos seleccionados: ${data.selectedOrders}`, margin, y);
+    doc.text(`Generado: ${new Date().toLocaleDateString('es-ES')}`, pageWidth - margin, y, { align: 'right' });
+    y += 15;
+
+    // Estadísticas
+    doc.setFontSize(11);
+    doc.setTextColor(0, 0, 0);
+    
+    const stats = [
+      `Total de pedidos: ${data.stats.selectedCount}`,
+      `Pedidos regulares: ${data.stats.regularCount}`,
+      `Pedidos extras: ${data.stats.extraCount}`,
+      `Monto total: $${data.stats.totalAmount.toFixed(2)} CUP`,
+      `Usuarios involucrados: ${data.stats.usersInvolved}`
+    ];
+
+    stats.forEach(stat => {
+      doc.text(stat, margin, y, { maxWidth: pageWidth - 2 * margin });
+      y += 7;
+    });
+
+    y += 10;
+
+    // Tabla
+    if (data.tableData && data.tableData.body.length > 0) {
+      doc.autoTable({
+        head: data.tableData.head,
+        body: data.tableData.body,
+        startY: y,
+        theme: 'grid',
+        styles: { 
+          fontSize: 9,
+          cellPadding: 3
+        },
+        headStyles: { 
+          fillColor: hexToRgb(COLORS.borgundy),
+          textColor: [255, 255, 255],
+          fontStyle: 'bold',
+          halign: 'center'
+        },
+        margin: { left: margin, right: margin }
+      });
+    }
+
+    // Guardar
+    const fileName = `REPORTE_SELECCIONADO_${new Date().toISOString().split('T')[0]}.pdf`;
+    doc.save(fileName);
+
+    return true;
+  } catch (error) {
+    console.error('Error generando reporte seleccionado:', error);
+    return false;
+  }
+};
+
 const verifyPDFFunctions = () => {
   console.log('🔍 Verificando funciones de PDF:');
   console.log('generateProfessionalReportPDF:', typeof generateProfessionalReportPDF);
@@ -791,7 +994,6 @@ useEffect(() => {
 }, []);
 
 
-// TEMPORAL: Agregar logs para debug en los botones
 const handleGeneralReportClick = () => {
   console.log('🖱️ Click en botón General Report');
   console.log('Datos disponibles:', allDataForCharts);
@@ -803,7 +1005,6 @@ const handleGeneralReportClick = () => {
 };
 
 
-// AGREGAR esta función para debug del estado de selección
 const debugSelectionState = () => {
   console.log('🔍 Estado de selección:', {
     selectedOrders,
@@ -819,10 +1020,6 @@ useEffect(() => {
 }, [selectedOrders]);
 
 
-//FIN DEBUG--------------------
-
-
-// AGREGAR función temporal para debug de clics
 const handleSelectedReportClick = () => {
   console.log('🖱️ CLICK en botón Reporte Seleccionado');
   console.log('Estado actual de selectedOrders:', selectedOrders);
@@ -844,7 +1041,6 @@ const handleSelectedReportClick = () => {
 };
 
 
-// AGREGAR esta función de respaldo en caso de que falle la importación
 const fallbackPDFGenerator = (data, type = 'general') => {
   console.log('🔄 Usando generador de PDF de respaldo...', { data, type });
   
@@ -862,7 +1058,7 @@ const fallbackPDFGenerator = (data, type = 'general') => {
     doc.text(`Total de pedidos: ${data.stats?.totalRequests || data.stats?.selectedCount || 0}`, 20, 40);
     doc.text(`Monto total: $${data.stats?.totalAmount?.toFixed(2) || '0.00'} CUP`, 20, 50);
     
-    // Agregar tabla básica
+    // Tabla básica
     if (data.tableData && data.tableData.body.length > 0) {
       let yPosition = 70;
       
@@ -1559,7 +1755,7 @@ const handleSelectAll = () => {
                                 <IconButton 
                                   size="small"
                                   onClick={() => {
-                                    // Generar reporte individual usando la función importada
+                                    // Generar reporte individual CORREGIDO
                                     const individualData = {
                                       selectedOrders: 1,
                                       stats: {
@@ -1573,16 +1769,38 @@ const handleSelectAll = () => {
                                         head: [['No.', 'Usuario', 'Proyecto', 'Fecha', 'Tipo', 'Estado', 'Total (CUP)']],
                                         body: [[
                                           '1',
-                                          p.user,
+                                          p.user || 'N/A',
                                           !p.projectId || p.projectId === 'extra' ? 'Pedido Extra' : getProjectName(p.projectId, p.userId),
                                           new Date(p.date).toLocaleDateString('es-ES'),
-                                          p.projectId === 'extra' ? 'Extra' : 'Regular',
+                                          p.orderType || getOrderType(p),
                                           p.status || 'Pendiente',
                                           `$${(p.total || 0).toFixed(2)}`
                                         ]]
+                                      },
+                                      period: `Individual - ${new Date().toLocaleDateString('es-ES')}`,
+                                      filters: {
+                                        user: 'Individual',
+                                        project: 'Individual', 
+                                        month: 'Individual',
+                                        period: 'Individual'
                                       }
                                     };
-                                    generateSelectedOrdersReportPDF(individualData);
+                                    
+                                    console.log('📄 Generando reporte individual:', individualData);
+                                    
+                                    // Llamar a la función CORRECTA
+                                    if (typeof generateSelectedOrdersReportPDF === 'function') {
+                                      generateSelectedOrdersReportPDF(individualData);
+                                      addNotification({
+                                        title: 'Reporte generado',
+                                        message: 'El PDF del pedido individual se ha descargado',
+                                        type: 'success'
+                                      });
+                                    } else {
+                                      console.error('❌ generateSelectedOrdersReportPDF no está disponible');
+                                      // Generar PDF simple de emergencia
+                                      generateSimpleIndividualPDF(p);
+                                    }
                                   }}
                                   sx={{ 
                                     color: colors.tan

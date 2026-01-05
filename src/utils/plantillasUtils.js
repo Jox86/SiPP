@@ -34,17 +34,17 @@ export const generarPlantillaActa = () => {
   doc.text(DATOS_INSTITUCIONALES.universidad, margin, 15);
   
   doc.setFontSize(12);
-  doc.setTextColor(...COLORS.borgundy);
+  doc.setTextColor(...hexToRgb(COLORS.borgundy));
   doc.text(DATOS_INSTITUCIONALES.departamento, pageWidth / 2, 25, { align: 'center' });
   
-  doc.setDrawColor(...COLORS.borgundy);
+  doc.setDrawColor(...hexToRgb(COLORS.borgundy));
   doc.setLineWidth(0.5);
   doc.line(margin, 32, pageWidth - margin, 32);
 
   // Título del documento
   y = 45;
   doc.setFontSize(16);
-  doc.setTextColor(...COLORS.borgundy);
+  doc.setTextColor(...hexToRgb(COLORS.borgundy));
   doc.text('PLANTILLA DE ACTA DE CONFORMIDAD', pageWidth / 2, y, { align: 'center' });
   y += 15;
 
@@ -59,6 +59,22 @@ export const generarPlantillaActa = () => {
   // Contenido de la plantilla
   doc.setFontSize(11);
   doc.setTextColor(0, 0, 0);
+
+  // src/utils/plantillasUtils.js
+
+  // Función para convertir HEX a RGB
+  const hexToRgb = (hex) => {
+    // Remover el # si está presente
+    const cleanedHex = hex.replace('#', '');
+    
+    // Convertir HEX a RGB
+    const bigint = parseInt(cleanedHex, 16);
+    const r = (bigint >> 16) & 255;
+    const g = (bigint >> 8) & 255;
+    const b = bigint & 255;
+    
+    return [r, g, b];
+  };
 
   const contenidoActa = [
     'ACTA DE CONFORMIDAD - PLANTILLA',
@@ -156,17 +172,17 @@ export const generarPlantillaReporte = () => {
   doc.text(DATOS_INSTITUCIONALES.universidad, margin, 15);
   
   doc.setFontSize(12);
-  doc.setTextColor(...COLORS.borgundy);
+  doc.setTextColor(...hexToRgb(COLORS.borgundy));
   doc.text(DATOS_INSTITUCIONALES.departamento, pageWidth / 2, 25, { align: 'center' });
   
-  doc.setDrawColor(...COLORS.borgundy);
+  doc.setDrawColor(...hexToRgb(COLORS.borgundy));
   doc.setLineWidth(0.5);
   doc.line(margin, 32, pageWidth - margin, 32);
 
   // Título del documento
   y = 45;
   doc.setFontSize(16);
-  doc.setTextColor(...COLORS.borgundy);
+  doc.setTextColor(...hexToRgb(COLORS.borgundy));
   doc.text('PLANTILLA DE INFORME TÉCNICO', pageWidth / 2, y, { align: 'center' });
   y += 15;
 
@@ -241,7 +257,7 @@ export const generarPlantillaReporte = () => {
 
   // Recomendaciones
   doc.setFontSize(11);
-  doc.setTextColor(...COLORS.borgundy);
+  doc.setTextColor(...hexToRgb(COLORS.borgundy));
   doc.text('RECOMENDACIONES Y OBSERVACIONES:', margin, y);
   y += 10;
 
@@ -286,7 +302,7 @@ export const generarPlantillaCargaProductos = () => {
   let y = 30;
 
   doc.setFontSize(16);
-  doc.setTextColor(...COLORS.borgundy);
+  doc.setTextColor(...hexToRgb(COLORS.borgundy));
   doc.text('PLANTILLA CARGA MASIVA - PRODUCTOS', pageWidth / 2, y, { align: 'center' });
   y += 20;
 
@@ -336,4 +352,101 @@ export default {
   generarPlantillaActa,
   generarPlantillaReporte,
   generarPlantillaCargaProductos
+};
+
+// Agregar esta función al final de plantillasUtils.js
+export const generateProfessionalReportPDF = (data) => {
+  try {
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const margin = 20;
+    let y = 30;
+
+    // Función para convertir HEX a RGB
+    const hexToRgb = (hex) => {
+      const cleanedHex = hex.replace('#', '');
+      const bigint = parseInt(cleanedHex, 16);
+      const r = (bigint >> 16) & 255;
+      const g = (bigint >> 8) & 255;
+      const b = bigint & 255;
+      return [r, g, b];
+    };
+
+    // Encabezado institucional
+    doc.setFontSize(10);
+    doc.setTextColor(100, 100, 100);
+    doc.text('UNIVERSIDAD DE LA HABANA', margin, 15);
+    
+    doc.setFontSize(12);
+    doc.setTextColor(...hexToRgb(COLORS.borgundy));
+    doc.text(DATOS_INSTITUCIONALES.departamento, pageWidth / 2, 25, { align: 'center' });
+    
+    doc.setDrawColor(...hexToRgb(COLORS.borgundy));
+    doc.setLineWidth(0.5);
+    doc.line(margin, 32, pageWidth - margin, 32);
+
+    // Título
+    y = 45;
+    doc.setFontSize(16);
+    doc.setTextColor(...hexToRgb(COLORS.borgundy));
+    doc.text('REPORTE GENERAL DE SOLICITUDES', pageWidth / 2, y, { align: 'center' });
+    y += 15;
+
+    // Información del reporte
+    doc.setFontSize(10);
+    doc.setTextColor(100, 100, 100);
+    doc.text(`Período: ${data.period}`, margin, y);
+    doc.text(`Generado: ${new Date().toLocaleDateString('es-ES')}`, pageWidth - margin, y, { align: 'right' });
+    y += 15;
+
+    // Estadísticas
+    doc.setFontSize(11);
+    doc.setTextColor(0, 0, 0);
+    
+    const stats = [
+      `Total de solicitudes: ${data.stats.totalRequests}`,
+      `Solicitudes regulares: ${data.stats.regularRequests}`,
+      `Pedidos extras: ${data.stats.extraRequests}`,
+      `Monto total: $${data.stats.totalAmount.toFixed(2)} CUP`,
+      `Usuarios activos: ${data.stats.activeUsers}`,
+      `Proyectos involucrados: ${data.stats.projectsCount}`
+    ];
+
+    stats.forEach(stat => {
+      doc.text(stat, margin, y, { maxWidth: pageWidth - 2 * margin });
+      y += 7;
+    });
+
+    y += 10;
+
+    // Tabla de datos
+    if (data.tableData && data.tableData.body.length > 0) {
+      doc.autoTable({
+        head: data.tableData.head,
+        body: data.tableData.body,
+        startY: y,
+        theme: 'grid',
+        styles: { 
+          fontSize: 9,
+          cellPadding: 3
+        },
+        headStyles: { 
+          fillColor: hexToRgb(COLORS.borgundy),
+          textColor: [255, 255, 255],
+          fontStyle: 'bold',
+          halign: 'center'
+        },
+        margin: { left: margin, right: margin }
+      });
+    }
+
+    // Guardar el PDF
+    const fileName = `REPORTE_GENERAL_${new Date().toISOString().split('T')[0]}.pdf`;
+    doc.save(fileName);
+
+    return true;
+  } catch (error) {
+    console.error('Error generando reporte profesional:', error);
+    return false;
+  }
 };

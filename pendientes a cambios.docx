@@ -2,14 +2,10 @@ OJO:
 
 -agregar modo oscuro a todas las interfaces. guiarse por los estilos del modo oscuro de la interfaz Reportes
 -cambiar colores a rojo #4E0101
--crear Nueva Paleta de Colores
--cambiar fondo de iconoes de topbar para que en vez de hacer hover en fondo cuadrado, se haga hover iluminandose el icono, ilimunar cerrar sesion con rojo
--crear nueva paleta de colores
--cambiar fondo general de la app a tono background (Pedidos)
--cambiar fondos de contenedores, tablas, secciones, tarjetas a tono background (Pedidos) con sombra
--guiarse por los estilos del modo oscuro de la interfaz Reportes para resto de interfaces
--cambiar fondo de formularios a estilo de formulario en Proyectos interfaz
 
+-realizar recopilacion y analisis de datos reales para la app: usuarios, proyectos, paginas webs o catalogos
+
+***-CONSIDERAR si se hace scrapping de sitios webs de empresas (tcp, mypimes, estatales) de productos que vendan
 
 
 Proyectos:

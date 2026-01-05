@@ -48,6 +48,7 @@ export default function Sidebar() {
   const [open, setOpen] = useState(!isSmallScreen);
   const [sidebarExpanded, setSidebarExpanded] = useState(!isTablet);
   const [userMenuAnchor, setUserMenuAnchor] = useState(null);
+  const [userData, setUserData] = useState(null);
 
   // Nueva paleta de colores
   const colors = {
@@ -58,17 +59,68 @@ export default function Sidebar() {
     shellstone: '#D9CBC2',
   };
 
-  const handleImageError = (event) => {
-    event.target.src = '';
-    event.target.style.background = colors.shellstone;
-    event.target.style.display = 'flex';
-    event.target.style.alignItems = 'center';
-    event.target.style.justifyContent = 'center';
-    event.target.style.fontWeight = 'bold';
-    event.target.style.color = colors.borgundy;
-    event.target.style.fontSize = '1.2rem';
-    event.target.innerHTML = 'SiPP';
+  // Función para obtener iniciales del nombre completo
+  const getInitials = (fullName) => {
+    if (!fullName || typeof fullName !== 'string' || fullName.trim() === '') {
+      return 'US'; // Default si no hay nombre
+    }
+    
+    const nameParts = fullName.trim().split(' ');
+    
+    if (nameParts.length === 1) {
+      // Si solo tiene un nombre, toma las dos primeras letras
+      return nameParts[0].substring(0, 2).toUpperCase();
+    }
+    
+    // Toma la primera letra del primer nombre y la primera letra del último apellido
+    const firstName = nameParts[0];
+    const lastName = nameParts[nameParts.length - 1];
+    
+    return (firstName[0] + lastName[0]).toUpperCase();
   };
+
+  // Cargar datos actualizados del usuario desde localStorage
+  const loadUserData = () => {
+    if (!currentUser) return;
+    
+    try {
+      // Obtener datos actualizados del usuario desde localStorage
+      const users = JSON.parse(localStorage.getItem('SiPP_users') || '[]');
+      const updatedUser = users.find(u => u.id === currentUser.id) || currentUser;
+      
+      // Actualizar el estado con los datos más recientes
+      setUserData(updatedUser);
+    } catch (error) {
+      console.error('Error al cargar datos del usuario:', error);
+      // Si hay error, usar los datos del contexto de autenticación
+      setUserData(currentUser);
+    }
+  };
+
+  // Efecto para cargar datos del usuario cuando cambia currentUser
+  useEffect(() => {
+    if (currentUser) {
+      loadUserData();
+    }
+  }, [currentUser]);
+
+  // Efecto para escuchar cambios en localStorage
+  useEffect(() => {
+    const handleStorageChange = () => {
+      loadUserData();
+    };
+
+    // Escuchar cambios en localStorage
+    window.addEventListener('storage', handleStorageChange);
+    
+    // También verificar periódicamente (cada 30 segundos)
+    const intervalId = setInterval(loadUserData, 30000);
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      clearInterval(intervalId);
+    };
+  }, [currentUser]);
 
   const toggleSidebar = () => {
     const newState = !open;
@@ -118,10 +170,12 @@ export default function Sidebar() {
       { text: 'Ayuda', icon: <HelpOutline />, path: '/ayuda' },
     ];
 
-    // Filtrar según el rol del usuario
-    if (currentUser?.role === 'admin') {
+    // Filtrar según el rol del usuario (usar userData si está disponible)
+    const userRole = userData?.role || currentUser?.role;
+    
+    if (userRole === 'admin') {
       return baseItems; // Admin ve todo
-    } else if (currentUser?.role === 'comercial') {
+    } else if (userRole === 'comercial') {
       return baseItems.filter(item => //Comercial de Depto. Comercial DST
         item.text !== 'Usuarios' && item.text !== 'Proyectos' && item.text !== 'Reportes' 
       );
@@ -141,6 +195,10 @@ export default function Sidebar() {
   const getHoverTextColor = () => colors.sapphire; // Hover siempre sapphire
   const getHoverColor = () => darkMode ? `${colors.sapphire}10` : `${colors.sapphire}05`;
   const getSelectedColor = () => darkMode ? `${colors.sapphire}15` : `${colors.sapphire}10`;
+
+  // Obtener datos del usuario (prioridad: userData > currentUser)
+  const displayUser = userData || currentUser;
+  const userInitials = getInitials(displayUser?.fullName);
 
   return (
     <>
@@ -331,100 +389,22 @@ export default function Sidebar() {
           </List>
         </Box>
 
-        {/* Footer con información de usuario y toggle de tema */}
+        {/* Footer con información de usuario */}
         <Box sx={{
           mt: 'auto',
           p: 1.5,
-          minHeight: '80px', // Menos alta
+          minHeight: '90px', 
           background: darkMode
             ? `linear-gradient(180deg, 
                 rgba(245, 240, 233, 0.05) 0%, 
                 rgba(217, 203, 194, 0.1) 100%)`
             : colors.text,
         }}>
-          {/* Toggle de tema moderno */}
-          {sidebarExpanded && (
-          <Box sx={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            mb: 1,
-            p: 1,
-            borderRadius: '12px',
-            background: darkMode
-              ? `linear-gradient(135deg, 
-                  rgba(245, 240, 233, 0.05) 0%, 
-                  rgba(217, 203, 194, 0.1) 100%)`
-              : `linear-gradient(135deg, 
-                  rgba(245, 240, 233, 0.8) 0%, 
-                  rgba(217, 203, 194, 0.6) 100%)`,
-          }}>
-            {/* Icono de Sol (Modo Claro) */}
-            <Box sx={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 1,
-              flex: 1,
-              justifyContent: 'center',
-              opacity: darkMode ? 0.5 : 1,
-              transition: 'all 0.3s ease',
-              transform: darkMode ? 'scale(0.9)' : 'scale(1)',
-            }}>
-              <WbSunny sx={{ 
-                color: darkMode ? colors.swanWhite : colors.tan,
-                fontSize: '1.2rem',
-              }} />
-            </Box>
-
-            {/* Switch moderno */}
-            <Switch
-              checked={darkMode}
-              onChange={toggleTheme}
-              size="small"
-              sx={{
-                '& .MuiSwitch-switchBase': {
-                  color: colors.swanWhite,
-                  '&.Mui-checked': {
-                    color: colors.borgundy,
-                  },
-                  '&.Mui-checked + .MuiSwitch-track': {
-                    backgroundColor: colors.tan,
-                    opacity: 1,
-                  },
-                },
-                '& .MuiSwitch-track': {
-                  backgroundColor: colors.borgundy,
-                  opacity: 0.8,
-                  borderRadius: 20,
-                },
-                '& .MuiSwitch-thumb': {
-                  backgroundColor: darkMode ? colors.borgundy : colors.swanWhite,
-                },
-              }}
-            />
-
-            {/* Icono de Luna (Modo Oscuro) */}
-            <Box sx={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 1,
-              flex: 1,
-              justifyContent: 'center',
-              opacity: darkMode ? 1 : 0.5,
-              transition: 'all 0.3s ease',
-              transform: darkMode ? 'scale(1)' : 'scale(0.9)',
-            }}>
-              <NightsStay sx={{ 
-                color: darkMode ? colors.tan : colors.sapphire,
-                fontSize: '1.2rem',
-              }} />
-            </Box>
-          </Box>
-        )}
 
           {/* Sección de usuario clickeable */}
           <Box 
             sx={{
+              height: '60px',
               display: 'flex',
               alignItems: 'center',
               gap: 1,
@@ -455,9 +435,6 @@ export default function Sidebar() {
               justifyContent: sidebarExpanded ? 'flex-start' : 'center',
             }}>
               <Avatar
-                src={currentUser?.avatar || '/src/assets/images/3d-user-icon.jpeg'}
-                alt="Avatar"
-                onError={handleImageError}
                 sx={{
                   width: 32,
                   height: 32,
@@ -466,8 +443,13 @@ export default function Sidebar() {
                   color: colors.borgundy,
                   fontWeight: 'bold',
                   fontSize: '0.8rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
                 }}
-              />
+              >
+                {userInitials}
+              </Avatar>
               {sidebarExpanded && (
                 <Box sx={{ minWidth: 0, flex: 1 }}>
                   <Typography variant="body2" sx={{
@@ -475,8 +457,11 @@ export default function Sidebar() {
                     color: getTextColor(),
                     fontSize: '0.9rem',
                     lineHeight: 1.2,
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
                   }}>
-                    {currentUser?.fullName?.split(' ')[0] || 'Usuario'}
+                    {displayUser?.fullName?.split(' ')[0] || 'Usuario'}
                   </Typography>
                   <Typography variant="caption" sx={{
                     color: colors.sapphire,
@@ -484,8 +469,8 @@ export default function Sidebar() {
                     lineHeight: 1,
                     fontWeight: 500,
                   }}>
-                    {currentUser?.role === 'admin' ? 'Administrador' : 
-                     currentUser?.role === 'comercial' ? 'Comercial' : 'Usuario'}
+                    {displayUser?.role === 'admin' ? 'Administrador' : 
+                     displayUser?.role === 'comercial' ? 'Comercial' : 'Usuario'}
                   </Typography>
                 </Box>
               )}
