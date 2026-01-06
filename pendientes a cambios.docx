@@ -1,11 +1,10 @@
-OJO:
 
 -agregar modo oscuro a todas las interfaces. guiarse por los estilos del modo oscuro de la interfaz Reportes
 -cambiar colores a rojo #4E0101
 
 -realizar recopilacion y analisis de datos reales para la app: usuarios, proyectos, paginas webs o catalogos
 
-***-CONSIDERAR si se hace scrapping de sitios webs de empresas (tcp, mypimes, estatales) de productos que vendan
+-implementar scrapping de sitios webs de empresas (tcp, mypimes, estatales) de productos que vendan
 
 
 Proyectos:
@@ -22,10 +21,14 @@ Notificaciones:
 corrige en Reportes:
 -al presionar en el boton 'Generar PDF General de Todos los Pedidos' se descarga el pdf juntos al pdf de 'Generar PDF de Pedidos Seleccionados' sin que se haya seleccionado ningun pedido
 
-**Pedidos:
--se editan los datos de empresa pero al guardarlos se duplica la empresa con los nuevos datos modificados pero tambien se pierde lo modificado en productos, etc al haber realizado antes compras (ej. los productos agotados se desmarcan y vuelven a estar disponibles)
-
 Mensajes
--en el modo oscuro, deben volverse oscuros: el fondo de la interfaz, fondo de la tabla en cada fila y columna, fondo de pestañas, fondo de filtros; deben volverse claras: todas las letras, textos, subtitulos, parrafos, titulos, encabezados, numeros, caracteres e iconos
 -No puedo marcar manualmente como leido o no leido algunos mensajes. cuando se abra un mensajes para mostrar los detalles debe marcarse como leido
 - el fondo del box y grid deben ser colos.paper, mantener el hover, el fondo de Detalles del Pedido debe ser del mismo que el actual, manten como está la ventana de archivados.
+
+
+Imagenes no cargan en catalogo de productos, modificar para que carguen online y sino local, sino se muestra logo-sipp
+
+Interfaz Pedidos / Carrito de Compras: adicionar y sustraer cantidad de pproducto se hace de dos en dos en vez de uno en uno
+
+cambiar logo-sipp por imagen UH
+
