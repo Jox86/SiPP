@@ -52,6 +52,8 @@ const Usuarios = () => {
     sapphire: '#667080',
     swanWhite: '#F5F0E9',
     shellstone: '#D9CBC2',
+    background: '#F5F0E9',
+    paper: '#FFFFFF',
   };
 
   // Estados
@@ -412,7 +414,7 @@ const handleSaveEdit = () => {
         borderRadius: 3,
         background: theme.palette.mode === 'dark'
           ? `linear-gradient(135deg, ${alpha(colors.sapphire, 0.15)} 0%, ${alpha(colors.borgundy, 0.1)} 100%)`
-          : `linear-gradient(135deg, ${colors.swanWhite} 0%, ${colors.shellstone}20 100%)`,
+          : `linear-gradient(135deg, ${colors.paper} 0%, ${colors.shellstone}20 100%)`,
         backdropFilter: 'blur(10px)',
         border: `1px solid ${alpha(theme.palette.divider, 0.2)}`,
         boxShadow: '0 8px 32px rgba(0,0,0,0.1)',
@@ -431,7 +433,7 @@ const handleSaveEdit = () => {
               fullWidth
               sx={{
                 '& .MuiOutlinedInput-root': {
-                  backgroundColor: colors.swanWhite,
+                  backgroundColor: colors.paper,
                   '&:hover fieldset': { borderColor: colors.sapphire },
                 }
               }}
@@ -485,8 +487,8 @@ const handleSaveEdit = () => {
           boxShadow: '0 8px 32px rgba(0,0,0,0.1)',
           overflow: 'hidden',
           background: theme.palette.mode === 'dark'
-            ? `linear-gradient(135deg, ${alpha(colors.sapphire, 0.15)} 0%, ${alpha(colors.borgundy, 0.1)} 100%)`
-            : `linear-gradient(135deg, ${colors.swanWhite} 0%, ${colors.swanWhite}20 100%)`,
+            ? colors.sapphire
+            : colors.paper,
           backdropFilter: 'blur(10px)',
           border: `1px solid ${alpha(theme.palette.divider, 0.2)}`,
         }}>

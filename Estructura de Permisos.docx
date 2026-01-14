@@ -2,11 +2,11 @@ Estructura de Permisos
 
 // Resumen de permisos:
 - Dashboard: Todos los roles
-- Pedidos: admin, user, comercial
+- Pedidos: admin, user, comercial, gestor
 - Proyectos: admin, user
 - Usuarios: solo admin
-- Reportes: admin, comercial
+- Reportes: admin, comercial, gestor
 - Mensajes: Todos los roles
 - Ayuda: Todos los roles
 - PerfilUsuario: Todos los roles
-- Desarrollo: admin, desarrollo
+- (aun no) Soporte técnico: admin, desarrollo

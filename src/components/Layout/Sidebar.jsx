@@ -228,7 +228,7 @@ export default function Sidebar() {
         open={open}
         onClose={() => isSmallScreen && setOpen(false)}
         sx={{
-          width: sidebarExpanded ? 270 : 80,
+          width: sidebarExpanded ? 220 : 80,
           flexShrink: 0,
           '& .MuiDrawer-paper': {
             width: sidebarExpanded ? 240 : 80,
@@ -549,10 +549,10 @@ export default function Sidebar() {
           sx={{
             position: 'fixed',
             top: 16,
-            left: sidebarExpanded ? 248 : 60,
+            left: sidebarExpanded ? 220 : 60,
             zIndex: 1300,
             backgroundColor: darkMode 
-              ? `rgba(78, 1, 1, 0.9)` 
+              ? `transparent` 
               : `rgba(245, 240, 233, 0.9)`,
             backdropFilter: 'blur(10px)',
             color: colors.borgundy,

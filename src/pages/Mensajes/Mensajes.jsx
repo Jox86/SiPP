@@ -122,24 +122,6 @@ const useLocalStorage = (key, initialValue) => {
   return [storedValue, setValue];
 };
 
-// Marcar mensaje como leído
-  const markAsRead = (messageId) => {
-    const messageExists = messages.find(msg => msg.id === messageId);
-    if (!messageExists) {
-      const newMessage = {
-        id: messageId,
-        read: true,
-        readAt: new Date().toISOString()
-      };
-      setMessages([...messages, newMessage]);
-    }
-  };
-
-  // Marcar mensaje como no leído
-  const markAsUnread = (messageId) => {
-    setMessages(messages.filter(msg => msg.id !== messageId));
-  };
-
 // Función para obtener el área del usuario
 const getUserArea = (userId) => {
   try {
@@ -320,6 +302,34 @@ export default function Mensajes() {
     'Otra razón'
   ];
 
+  // Marcar mensaje como leído
+  const markAsRead = (messageId) => {
+    const messageExists = messages.find(msg => msg.id === messageId);
+    if (messageExists) {
+      // Actualizar mensaje existente
+      const updatedMessages = messages.map(msg =>
+        msg.id === messageId ? { ...msg, read: true, readAt: new Date().toISOString() } : msg
+      );
+      setMessages(updatedMessages);
+    } else {
+      // Crear nuevo registro de mensaje leído
+      const newMessage = {
+        id: messageId,
+        read: true,
+        readAt: new Date().toISOString()
+      };
+      setMessages([...messages, newMessage]);
+    }
+  };
+
+  // Marcar mensaje como no leído
+  const markAsUnread = (messageId) => {
+    const updatedMessages = messages.map(msg =>
+      msg.id === messageId ? { ...msg, read: false, readAt: null } : msg
+    );
+    setMessages(updatedMessages);
+  };
+
   // Procesar mensajes según los requisitos
   const processedMessages = useMemo(() => {
     const allOrders = [...purchases, ...specialOrders];
@@ -368,7 +378,7 @@ export default function Mensajes() {
           items: order.items || [],
           orderType: order.orderType,
           characteristics: order.characteristics,
-          read: messages.some(msg => msg.id === order.id) || false,
+          read: messages.some(msg => msg.id === order.id + (isSpecial ? '-special' : '-normal')) || false,
           timestamp: order.date,
           denialReason: order.denialReason,
           statusUpdatedAt: order.statusUpdatedAt,
@@ -467,8 +477,6 @@ export default function Mensajes() {
       
       if (isSpecial) {
         subType = `P.Extra-${order.orderType || 'producto'}`;
-      } else {
-        subType = 'General';
       }
       
       return {
@@ -490,7 +498,7 @@ export default function Mensajes() {
         items: order.items || [],
         orderType: order.orderType,
         characteristics: order.characteristics,
-        read: messages.some(msg => msg.id === order.id) || false,
+        read: messages.some(msg => msg.id === order.id + (isSpecial ? '-special' : '-normal')) || false,
         timestamp: order.date,
         denialReason: order.denialReason,
         statusUpdatedAt: order.statusUpdatedAt,
@@ -508,7 +516,7 @@ export default function Mensajes() {
   const activeMessages = useMemo(() => 
     processedMessages.filter(msg => !msg.archived), [processedMessages]);
 
-  //  CORREGIDO: Filtrar mensajes según vista seleccionada
+  // Filtrar mensajes según vista seleccionada
   const filteredMessages = useMemo(() => {
     let baseMessages = activeMessages;
     
@@ -532,29 +540,21 @@ export default function Mensajes() {
       const matchesType = selectedType === 'all' || 
         (selectedType === 'Productos' && message.subType.includes('Productos')) ||
         (selectedType === 'Servicios' && message.subType.includes('Servicios')) ||
-        (selectedType === 'P.Extra' && message.subType.includes('P.Extra')) ||
-        (selectedType === 'General' && message.subType === 'General');
+        (selectedType === 'P.Extra' && message.subType.includes('P.Extra'));
       const matchesUser = selectedUser === 'all' || message.user === selectedUser;
 
       return matchesSearch && matchesStatus && matchesType && matchesUser;
     });
   }, [activeMessages, searchTerm, selectedStatus, selectedType, selectedUser, viewMode]);
 
-  //  CORREGIDO: Marcar mensaje como leído automáticamente al expandir
+  // Marcar mensaje como leído automáticamente al expandir
   const handleExpandOrder = (messageId) => {
+    const isOpening = expandedOrder !== messageId;
     setExpandedOrder(expandedOrder === messageId ? null : messageId);
     
-    // Marcar como leído automáticamente al expandir
-    if (expandedOrder !== messageId) {
-      const messageExists = messages.find(msg => msg.id === messageId);
-      if (!messageExists) {
-        const newMessage = {
-          id: messageId,
-          read: true,
-          readAt: new Date().toISOString()
-        };
-        setMessages([...messages, newMessage]);
-      }
+    // Marcar como leído automáticamente al abrir detalles
+    if (isOpening) {
+      markAsRead(messageId);
     }
   };
 
@@ -707,7 +707,7 @@ export default function Mensajes() {
     const company = getCompanyFromOrder(order.originalOrder || order);
     
     return (
-      <Box sx={{ marginTop: isMobile ? '10%' : 5, mt: 2, p: 2, backgroundColor: colors.background, borderRadius: 1 }}>
+      <Box sx={{ mt: 2, p: 2, backgroundColor: colors.background, borderRadius: 1 }}>
         <Typography variant="h6" gutterBottom sx={{ color: colors.text, fontWeight: 'bold' }}>
           Detalles del Pedido
         </Typography>
@@ -815,7 +815,7 @@ export default function Mensajes() {
           </Alert>
         )}
 
-        {/*  CORREGIDO: Solo mostrar acciones si NO está archivado y el usuario es admin o comercial */}
+        {/* Solo mostrar acciones si NO está archivado y el usuario es admin o comercial */}
         {!order.archived && ['admin', 'comercial'].includes(currentUser?.role) && (
           <Box sx={{ mt: 2, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
             <Button
@@ -859,7 +859,7 @@ export default function Mensajes() {
       display: 'flex',
       height: '100vh',
       overflow: 'hidden',
-      backgroundColor: colors.background,
+      backgroundColor: colors.paper, // Cambiado a paper
       color: colors.text,
     }}>
       {/* Contenido Principal */}
@@ -874,7 +874,7 @@ export default function Mensajes() {
         <AppBar 
           position="static" 
           sx={{ 
-            backgroundColor: colors.paper, //  Cambiado a paper
+            backgroundColor: colors.paper,
             color: colors.text,
             boxShadow: 'none',
             borderBottom: `2px solid ${colors.tan}`
@@ -916,7 +916,7 @@ export default function Mensajes() {
         {/* Barra de herramientas */}
         <Box sx={{ 
           p: 2, 
-          backgroundColor: colors.paper, //  Cambiado a paper
+          backgroundColor: colors.paper,
           borderBottom: `1px solid ${colors.shellstone}` 
         }}>
           <Grid container spacing={2} alignItems="center">
@@ -1006,12 +1006,11 @@ export default function Mensajes() {
                   <MenuItem value="Productos">Productos</MenuItem>
                   <MenuItem value="Servicios">Servicios</MenuItem>
                   <MenuItem value="P.Extra">Pedidos Extra</MenuItem>
-                  <MenuItem value="General">General</MenuItem>
                 </Select>
               </FormControl>
             </Grid>
 
-            {/*  CORREGIDO: Incluir rol comercial */}
+            {/* Incluir rol comercial */}
             {['admin', 'comercial'].includes(currentUser?.role) && (
               <Grid item xs={6} md={2}>
                 <FormControl fullWidth size="small">
@@ -1041,7 +1040,7 @@ export default function Mensajes() {
             )}
           </Grid>
 
-          {/*  CORREGIDO: Pestañas con color borgundy para la seleccionada */}
+          {/* Pestañas con color borgundy para la seleccionada */}
           <Box sx={{ mt: 2 }}>
             <Tabs
               value={viewMode}
@@ -1050,11 +1049,11 @@ export default function Mensajes() {
                 '& .MuiTab-root': {
                   color: colors.text,
                   '&.Mui-selected': {
-                    color: colors.borgundy, //  Color borgundy para pestaña seleccionada
+                    color: colors.borgundy,
                   },
                 },
                 '& .MuiTabs-indicator': {
-                  backgroundColor: colors.borgundy, //  Color borgundy para el indicador
+                  backgroundColor: colors.borgundy,
                 }
               }}
             >
@@ -1070,7 +1069,7 @@ export default function Mensajes() {
           flex: 1, 
           p: 2, 
           overflow: 'auto',
-          backgroundColor: colors.background
+          backgroundColor: colors.paper // Cambiado a paper
         }}>
           {/* Lista principal de mensajes */}
           <Typography variant="h6" gutterBottom sx={{ color: colors.text, fontWeight: 'bold' }}>
@@ -1106,7 +1105,7 @@ export default function Mensajes() {
                     sx={{ 
                       p: 2,
                       cursor: 'pointer',
-                      backgroundColor: expandedOrder === message.id ? colors.swanWhite : colors.paper, //  Cambiado a paper
+                      backgroundColor: expandedOrder === message.id ? colors.swanWhite : colors.paper,
                       '&:hover': {
                         backgroundColor: colors.swanWhite
                       }
@@ -1120,7 +1119,11 @@ export default function Mensajes() {
                             size="small"
                             onClick={(e) => {
                               e.stopPropagation();
-                              message.read ? markAsUnread(message.id) : markAsRead(message.id);
+                              if (message.read) {
+                                markAsUnread(message.id);
+                              } else {
+                                markAsRead(message.id);
+                              }
                             }}
                             sx={{ color: colors.text }}
                           >
@@ -1130,7 +1133,7 @@ export default function Mensajes() {
                             }
                           </IconButton>
                         </Tooltip>
-                        {/*  CORREGIDO: Icono de estado del pedido */}
+                        {/* Icono de estado del pedido */}
                         <Box sx={{ color: colors.text }}>
                           {getStatusIcon(message.status)}
                         </Box>                        
@@ -1160,7 +1163,7 @@ export default function Mensajes() {
                               message.subType.includes('Productos') ? colors.borgundy : 
                               message.subType.includes('Servicios') ? colors.sapphire : 
                               message.subType.includes('P.Extra') ? colors.tan : colors.shellstone,
-                            color: 'white', //  Texto blanco para chips con fondo de color
+                            color: 'white',
                             fontWeight: 'bold'
                           }}
                         />
@@ -1201,7 +1204,7 @@ export default function Mensajes() {
           <>
             <DialogTitle sx={{ 
               backgroundColor: colors.borgundy, 
-              color: colors.paper, //  Texto claro sobre fondo borgundy
+              color: colors.paper,
               borderBottom: `1px solid ${colors.shellstone}`
             }}>
               Editar Estado del Pedido
@@ -1309,7 +1312,7 @@ export default function Mensajes() {
                 disabled={newStatus === 'Denegado' && !denialReason}
                 sx={{ 
                   backgroundColor: colors.borgundy,
-                  color: colors.paper, //  Texto claro sobre fondo borgundy
+                  color: colors.paper,
                   '&:hover': {
                     backgroundColor: colors.tan,
                   }
@@ -1339,7 +1342,7 @@ export default function Mensajes() {
       >
         <DialogTitle sx={{ 
           backgroundColor: colors.borgundy, 
-          color: colors.paper, //  Texto claro sobre fondo borgundy
+          color: colors.paper,
           borderBottom: `1px solid ${colors.shellstone}`
         }}>
           Pedidos Archivados

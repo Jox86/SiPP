@@ -1,34 +1,98 @@
+PENDIENTES:
+
+-para version 2 activar y mejorar el modo oscuro comentariado en el topbar (Tooltip)
 
 -agregar modo oscuro a todas las interfaces. guiarse por los estilos del modo oscuro de la interfaz Reportes
 -cambiar colores a rojo #4E0101
-
+-cambiar logo-sipp por imagen UH
 -realizar recopilacion y analisis de datos reales para la app: usuarios, proyectos, paginas webs o catalogos
+-reviar si entre roles se visualizan y gestionan datos no correspondientes al rol
 
--implementar scrapping de sitios webs de empresas (tcp, mypimes, estatales) de productos que vendan
+INTERFACES:
 
+Dashboard
+- Mejorar orden de los graficos en los distintos tamaños de pantallas 
+- Eliminar iconos de descarga de graficos 
+- Modificar en los pedidos extras que se muestran en Pedidos recientes, la columna Monto debe mostrar guion (-) en vez de $0
+- En Proyectos Más Activos, la columna de presupuesto debe mostrar el valor actualizado desde la interfaz Proyectos
+
+Pedidos:
+- las vistas previas una vez cargadas se deben poder ver offline, asi que una solucion puede ser guardar chache de las vistas previas localmente
+- Imagenes no cargan en catalogo de productos, modificar para que carguen online y sino local, sino se muestra logo-sipp
+- Carrito de Compras: adicionar y sustraer cantidad de pproducto se hace de dos en dos en vez de uno en uno
+- implementar scrapping de sitios webs de empresas (tcp, mypimes, estatales) de productos que vendan
+- LEn la vista de Productos los filtros deben filtrar por empresa, por categorias y por el buscador 
+- Los catalogos deben ordenarse empezando por los ultimos productos agregados
+- Al intentaar añadir productos desde un enlace a web y no se extraen los productos reales, en vez de mostrar varias tarjetas de productos simulados mejor que muestre una sola tarjeta con la vista previa e informacion de la Empresa/Tienda. aunque despues de cargar se quede la app offline debe mostrarse la vista previa 
+- En la vista Historial, ocultar para administrador, comercial y gestor la accion editar pedido
+
+Usuarios:
+
+- implementar exportar PDF
+- implementar Acciones editar y eliminar
+- implementar acciones visibles solo para admin : visualizar informacion, editar datos, eliminar de la app
+- crear nuevo usuario no visible en la interfaz, nuevo rol Gestor de Proyectos: 
+    id: 'gestor_004',
+    fullName: 'Gestor de Proyectos',
+    email: 'gestor@sipp.uh.cu',
+    areaType: 'direccion', 
+    area: 'DST',
+    role: 'gestor',
+    password: 'gestor123', 
+    avatar: '/src/assets/images/users/3d-user-icon.jpg', 
+    mobile: '+53 51765567',
+    phone: '78765768'
+    
+Estructura de permisos de gestor
+- Dashboard: Todos los roles
+- Pedidos: admin, user, comercial, gestor
+- Proyectos: admin, user
+- Usuarios: solo admin
+- Reportes: admin, comercial, gestor
+- Mensajes: Todos los roles
+- Ayuda: Todos los roles
+- PerfilUsuario: Todos los roles
 
 Proyectos:
--el presupuesto que se calcula en la interfaz Pedidos debe mostrarse en Proyectos
+
+- eliminar funcionalidad de Nuevo Proyecto (despues de implementar vinculacion con Submayor y LDAP)
+- implementar exportar PDF
+- ocultar funcionalidad de Nuevo Proyecto si el usuario no es admin
+- implementar acciones visibles solo para admin : visualizar informacion, editar datos, eliminar de la app
+
+Mensajes:
+
+- El buscador debe buscar segun informacion dentro de un mensaje: Empresa, informacion del producto, productos
+- Recibir mensajes desde Ayuda/soporte
+- ¿¿¿Cuando el jefe de proyecto realiza un pedido de cualquier tipo pero que corresponda a empresas distintas deben separarse los pedidos para mensajes, historial de pedidos, reportes y actas distintos???
+- Si hay mensajes de pedidos archivados mostrar en el boton Archivados la cantidad existente
+
+Reportes:
+
+- Mejorar estructuracion de los graficos en todo tamaño de pantallas
+- en los graficos Distribución por Tipo, Tendencia Mensual  y Top Usuarios no se especifica si se muestran la cantidad de productos pedidos, la cantidad de presupuesto gastado, etcetera. debe msotrar informacion logica e imprescindible, sino sobra el grafico
+- el Total Solicitudes se da segun la cantidad de pedidos en Historial
+- el filtro por mes no funciona
+- Cambiar contenido de vista de Actas de conformidad a Actas para departamento economico o juridico
+- revisar contenido de pie de pagina en todos los PDF
+- separar los reportes si son de tipo diferente (tipo Productos es distinto a tipo Servicios)
+En doc Actas de Conformidad:
+- el subtitulo A: Departamento de Economía en **negrita** debe cambiarse por a quien vaya dirigida el acta. ej. Comité de Contratación
+- eliminar funcionalidad para Items entregados
+- separar los placeholders de datos y donde firma el usuario y donde firma el jefe de DST
+En reportes Seleccionados en tils/PDFReportTemplate y para reporte General en utils/pdfGenerator:
+- agregar debajo del nombre de la Uh el nombre de la DST y eliminarlo del titulo
+- separar los renglones/interlineado en la INTRODUCCIÓN
+- verificar y corregir generacion de tabla con detalles de los pedidos por cada usuario
+
+Ayuda 
+ 
+- Actualizar toda la informacion de la app actualizada
 
 Notificaciones:
-- debe mostrar la notificacion en campana de todos los datos de los mensajes de pedidos
-- debe mostrar cuando cambia de estado un pedido desde Mensajes interfaz y ademas en caso de admin esta listo para generar el acta de conformidad
--cambiar notificaciones para que no hayan datos simulados, solo datos reales
+- debe mostrar cuando cambia de estado un pedido desde Mensajes interfaz y ademas, en caso de admin esta listo para generar el acta de conformidad
+- cambiar notificaciones para que no hayan datos simulados, solo datos reales
+- mostrar notificacion push en la app, que tengan tiempo estandar de mostrarse en pantalla
+- en vez del icono verde, en las notifiacciones negativas (ej. pedido denegado) debe mostrarse un icono rojo, en las notifiaciones de pausa (ej. pedido archivado archivado) el icono debe ser amarillo o naranja
 
-**Dashboard
-- mejorar graficos y datos que se muestran
-
-corrige en Reportes:
--al presionar en el boton 'Generar PDF General de Todos los Pedidos' se descarga el pdf juntos al pdf de 'Generar PDF de Pedidos Seleccionados' sin que se haya seleccionado ningun pedido
-
-Mensajes
--No puedo marcar manualmente como leido o no leido algunos mensajes. cuando se abra un mensajes para mostrar los detalles debe marcarse como leido
-- el fondo del box y grid deben ser colos.paper, mantener el hover, el fondo de Detalles del Pedido debe ser del mismo que el actual, manten como está la ventana de archivados.
-
-
-Imagenes no cargan en catalogo de productos, modificar para que carguen online y sino local, sino se muestra logo-sipp
-
-Interfaz Pedidos / Carrito de Compras: adicionar y sustraer cantidad de pproducto se hace de dos en dos en vez de uno en uno
-
-cambiar logo-sipp por imagen UH
 

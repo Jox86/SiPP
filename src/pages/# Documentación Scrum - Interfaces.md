@@ -2001,7 +2001,7 @@ const validateProfile = useCallback(() => {
 const scrumTeamStructure = {
   facultad: ["Facultad 1", "Facultad 2", "Facultad 3", "Facultad 4"], // Equipos grandes
   direccion: ["DST", "VRTD", "MC", "Rectorado"], // Equipos de dirección
-  area: ["Comunicación", "Letras", "Jurídica", "Técnica"], // Equipos especializados
+  area: ["Comunicación", "Artes y Letras", "Jurídica", "Técnica"], // Equipos especializados
   departamento: ["Desarrollo", "Soporte", "Infraestructura", "Gestión"], // Scrum teams
   oficina: ["Oficina Principal", "Oficina Regional", "Oficina Técnica"] // Locations
 };

@@ -4,7 +4,7 @@ import 'jspdf-autotable';
 // Datos institucionales
 const INSTITUTIONAL_DATA = {
   university: 'UNIVERSIDAD DE LA HABANA',
-  department: 'Departamento de Servicios Tecnológicos (DST)',
+  department: 'Dirección de Servicios Tecnológicos (DST)',
   director: 'Dr. Carlos E. Quevedo',
   directorPosition: 'Director del Departamento de Servicios Tecnológicos'
 };
@@ -65,9 +65,6 @@ export const generateProfessionalReportPDF = (data) => {
       doc.setFontSize(10);
       doc.setTextColor(...PDF_CONFIG.colors.gray);
       doc.text(INSTITUTIONAL_DATA.university, left, 15);
-      
-      doc.setFontSize(12);
-      doc.setTextColor(...PDF_CONFIG.colors.primary);
       doc.text(INSTITUTIONAL_DATA.department, pageWidth / 2, 27, { align: 'center' });
       
       doc.setDrawColor(...PDF_CONFIG.colors.primary);
@@ -267,7 +264,6 @@ export const generateProfessionalReportPDF = (data) => {
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(9);
     doc.text(INSTITUTIONAL_DATA.directorPosition, left + 100, yPosition + 15, { align: 'center' });
-    doc.text(INSTITUTIONAL_DATA.department, left + 100, yPosition + 20, { align: 'center' });
 
     // Pie de página final
     addFooter();

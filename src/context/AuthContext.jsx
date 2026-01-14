@@ -7,7 +7,7 @@ const DEFAULT_USERS = [
   {
     id: 'admin_001',
     fullName: 'Administrador SiPP',
-    email: 'admin@sipp.uh.cu',
+    email: 'sipp.uh.cu',
     areaType: 'direccion',
     area: 'DST',
     role: 'admin',
@@ -22,7 +22,7 @@ const DEFAULT_USERS = [
     fullName: 'Gestión Comercial DST',
     email: 'comercial@sipp.uh.cu',
     areaType: 'direccion', 
-    area: 'Gestión Comercial',
+    area: 'DST',
     role: 'comercial',
     password: 'comercial123', // Cambiado de passwordHash a password
     avatar: '/src/assets/images/users/3d-user-icon.jpg', // Ruta corregida
@@ -35,12 +35,25 @@ const DEFAULT_USERS = [
     fullName: 'Usuario de Prueba',
     email: 'usuario@sipp.uh.cu',
     areaType: 'facultad', 
-    area: 'Letras',
+    area: 'Artes y Letras',
     role: 'user',
-    password: 'usuario123', // Cambiado de passwordHash a password
-    avatar: '/src/assets/images/users/3d-user-icon.jpg', // Ruta corregida
+    password: 'usuario123', 
+    avatar: '/src/assets/images/users/3d-user-icon.jpg', 
     mobile: '+53 51234567',
     phone: '78765432',
+    createdAt: '2025-01-01T00:00:00Z',
+  },
+  {
+    id: 'gestor_004',
+    fullName: 'Gestor de Proyectos',
+    email: 'gestor@sipp.uh.cu',
+    areaType: 'direccion', 
+    area: 'DST',
+    role: 'gestor',
+    password: 'gestor123', 
+    avatar: '/src/assets/images/users/3d-user-icon.jpg', 
+    mobile: '+53 51234567',
+    phone: '78765768',
     createdAt: '2025-01-01T00:00:00Z',
   },
 ];

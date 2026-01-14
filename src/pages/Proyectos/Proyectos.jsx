@@ -1004,13 +1004,13 @@ const canManageProject = (project) => {
                     disabled={!form.areaType}
                   >
                     <MenuItem value="">Seleccionar área</MenuItem>
-                    {form.areaType === 'facultad' && ['Facultad de Matemática y Computación', 'Facultad de Física', 'Facultad de Química', 'Facultad de Biología'].map(a => (
+                    {form.areaType === 'facultad' && ['Artes y Letras', 'Biología', 'Colegio Universitario San Gerónimo de La Habana', 'Comunicación', 'Contabilidad y Finanzas', 'Derecho', 'Economía', 'Facultad de Educación a Distancia', 'Facultad de Español para No Hispanohablantes', 'Farmacia y Alimentos', 'Filosofía e Historia', 'Física', 'Geografía', 'Instituto Superior de Diseño', 'Instituto Superior de Tecnologías y Ciencias Aplicadas', 'Lenguas Extranjeras', 'Matemática y Computación', 'Psicología', 'Química', 'Turismo'].map(a => (
                       <MenuItem key={a} value={a}>{a}</MenuItem>
                     ))}
                     {form.areaType === 'direccion' && ['VRTD', 'DST', 'MC', 'Rectorado'].map(a => (
                       <MenuItem key={a} value={a}>{a}</MenuItem>
                     ))}
-                    {form.areaType === 'area' && ['Comunicación', 'Letras', 'Jurídica', 'Técnica'].map(a => (
+                    {form.areaType === 'area' && ['Comunicación', 'Artes y Letras', 'Jurídica', 'Técnica'].map(a => (
                       <MenuItem key={a} value={a}>{a}</MenuItem>
                     ))}
                     {form.areaType === 'departamento' && ['Desarrollo', 'Soporte', 'Infraestructura', 'Gestión'].map(a => (

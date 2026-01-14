@@ -406,13 +406,13 @@ const Configuraciones = () => {
                       disabled={!profile.areaType}
                     >
                       <MenuItem value="">Seleccionar área</MenuItem>
-                      {profile.areaType === 'facultad' && ['Facultad 1', 'Facultad 2', 'Facultad 3', 'Facultad 4'].map(a => (
+                      {profile.areaType === 'facultad' && ['Artes y Letras', 'Biología', 'Colegio Universitario San Gerónimo de La Habana', 'Comunicación', 'Contabilidad y Finanzas', 'Derecho', 'Economía', 'Facultad de Educación a Distancia', 'Facultad de Español para No Hispanohablantes', 'Farmacia y Alimentos', 'Filosofía e Historia', 'Física', 'Geografía', 'Instituto Superior de Diseño', 'Instituto Superior de Tecnologías y Ciencias Aplicadas', 'Lenguas Extranjeras', 'Matemática y Computación', 'Psicología', 'Química', 'Turismo'].map(a => (
                         <MenuItem key={a} value={a}>{a}</MenuItem>
                       ))}
                       {profile.areaType === 'direccion' && ['DST', 'VRTD', 'MC', 'Rectorado'].map(a => (
                         <MenuItem key={a} value={a}>{a}</MenuItem>
                       ))}
-                      {profile.areaType === 'area' && ['Comunicación', 'Letras', 'Jurídica', 'Técnica'].map(a => (
+                      {profile.areaType === 'area' && ['Comunicación', 'Artes y Letras', 'Jurídica', 'Técnica'].map(a => (
                         <MenuItem key={a} value={a}>{a}</MenuItem>
                       ))}
                       {profile.areaType === 'departamento' && ['Desarrollo', 'Soporte', 'Infraestructura', 'Gestión'].map(a => (

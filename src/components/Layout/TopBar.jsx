@@ -164,7 +164,7 @@ export default function TopBar({ open }) {
 
         {/* Acciones */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          {/*  Botón de Toggle de Tema Mejorado */}
+          {/*  Botón de Toggle de Tema Mejorado 
           <Tooltip title={darkMode ? "Modo claro" : "Modo oscuro"}>
             <IconButton
               size="medium"
@@ -188,7 +188,7 @@ export default function TopBar({ open }) {
               </ModernIcon>
             </IconButton>
           </Tooltip>
-          
+          */}
           {/*  Botón de Notificaciones Actualizado */}
           <Tooltip title="Notificaciones">
             <IconButton
