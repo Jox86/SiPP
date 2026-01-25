@@ -389,15 +389,6 @@ export default function Mensajes() {
     'Híbrido'
   ];
 
-  const locationTypeOptions = [
-    'Facultad',
-    'Dirección',
-    'Área',
-    'Departamento',
-    'Oficina',
-    'Otro'
-  ];
-
   const equipmentTypeOptions = [
     'Computadoras',
     'Servidores',
@@ -421,7 +412,7 @@ export default function Mensajes() {
 
   const areaOptionsByType = {
     facultad: ['Artes y Letras', 'Biología', 'Colegio Universitario San Gerónimo de La Habana', 'Comunicación', 'Contabilidad y Finanzas', 'Derecho', 'Economía', 'Facultad de Educación a Distancia', 'Facultad de Español para No Hispanohablantes', 'Farmacia y Alimentos', 'Filosofía e Historia', 'Física', 'Geografía', 'Instituto Superior de Diseño', 'Instituto Superior de Tecnologías y Ciencias Aplicadas', 'Lenguas Extranjeras', 'Matemática y Computación', 'Psicología', 'Química', 'Turismo'],
-    direccion: ['VRTD', 'DST', 'MC', 'Rectorado'],
+    direccion: ['Vicerrectoría de Transformación Digital VRTD', 'Dirección de Servicios Tecnológicos DST', 'Direección de Comunicaciones', 'Dirección de Innovación Digital DID', 'Rectorado'],
     area: ['Comunicación', 'Artes y Letras', 'Jurídica', 'Técnica'],
     departamento: ['Desarrollo', 'Soporte', 'Infraestructura', 'Gestión'],
     oficina: ['Oficina Principal', 'Oficina Regional', 'Oficina Técnica']
@@ -1128,7 +1119,6 @@ const filteredMessages = useMemo(() => {
       if (serviceDetails.participants) itemsDetails += `Participantes: ${serviceDetails.participants}\n`;
       if (serviceDetails.days) itemsDetails += `Días: ${serviceDetails.days}\n`;
       if (serviceDetails.startDate) itemsDetails += `Fecha de inicio: ${serviceDetails.startDate}\n`;
-      if (serviceDetails.locationType) itemsDetails += `Tipo de lugar: ${serviceDetails.locationType}\n`;
       if (serviceDetails.location) itemsDetails += `Lugar específico: ${serviceDetails.location}\n`;
       if (serviceDetails.requirements) itemsDetails += `Requisitos adicionales: ${serviceDetails.requirements}\n`;
       if (serviceDetails.equipmentType) itemsDetails += `Tipo de equipo: ${serviceDetails.equipmentType}\n`;
@@ -2900,23 +2890,7 @@ const filteredMessages = useMemo(() => {
                             </FormControl>
                           </Grid>
                         )}
-                        
-                        <Grid item xs={12}>
-                          <FormControl fullWidth margin="normal" size="small">
-                            <InputLabel>Tipo de lugar</InputLabel>
-                            <Select
-                              value={serviceDetailsForm.locationType}
-                              onChange={(e) => setServiceDetailsForm(prev => ({ ...prev, locationType: e.target.value }))}
-                              label="Tipo de lugar"
-                            >
-                              <MenuItem value="">Seleccionar</MenuItem>
-                              {locationTypeOptions.map(location => (
-                                <MenuItem key={location} value={location}>{location}</MenuItem>
-                              ))}
-                            </Select>
-                          </FormControl>
-                        </Grid>
-                        
+                      
                         <Grid item xs={12}>
                           <TextField
                             label="Requisitos adicionales"

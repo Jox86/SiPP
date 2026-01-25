@@ -2000,7 +2000,7 @@ const validateProfile = useCallback(() => {
 // Estructura de áreas alineada con equipos Scrum
 const scrumTeamStructure = {
   facultad: ["Facultad 1", "Facultad 2", "Facultad 3", "Facultad 4"], // Equipos grandes
-  direccion: ["DST", "VRTD", "MC", "Rectorado"], // Equipos de dirección
+  direccion:     direccion: ['Vicerrectoría de Transformación Digital VRTD', 'Dirección de Servicios Tecnológicos DST', 'Direección de Comunicaciones', 'Dirección de Innovación Digital DID', 'Rectorado'], // Equipos de dirección
   area: ["Comunicación", "Artes y Letras", "Jurídica", "Técnica"], // Equipos especializados
   departamento: ["Desarrollo", "Soporte", "Infraestructura", "Gestión"], // Scrum teams
   oficina: ["Oficina Principal", "Oficina Regional", "Oficina Técnica"] // Locations
