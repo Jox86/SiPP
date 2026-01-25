@@ -505,12 +505,12 @@ export default function Reportes() {
     loadProjects();
   }, []);
 
-  // Filtrar usuarios - excluir comerciales y admin
+  // Filtrar usuarios - excluir comercial, gestor y admin
   const filteredClients = useMemo(() => {
     return clients.filter(user => 
       user.role !== 'admin' && 
       user.role !== 'comercial' && 
-      user.role !== 'commercial'
+      user.role !== 'gestor'
     );
   }, [clients]);
 

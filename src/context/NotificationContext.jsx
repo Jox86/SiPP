@@ -39,8 +39,8 @@ export const NotificationProvider = ({ children }) => {
         
         // Filtrar pedidos relevantes para el usuario actual
         const relevantOrders = allOrders.filter(order => {
-          if (['admin', 'comercial'].includes(currentUser?.role)) {
-            // Admin y comercial ven todos los pedidos pendientes
+          if (['admin', 'comercial', 'gestor'].includes(currentUser?.role)) {
+            // Admin, comercial y gestor ven todos los pedidos pendientes
             return order.status === 'Pendiente' || order.status === 'pending';
           } else {
             // Usuarios normales solo ven sus propios pedidos pendientes

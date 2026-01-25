@@ -792,11 +792,11 @@ export default function Catalogos() {
 
   // Añadir al carrito
   const addToCart = (item) => {
-    // Restringir si es comercial
-    if (currentUser?.role === 'comercial') {
+    // Restringir si es comercial o gestor
+    if (currentUser?.role === 'comercial' || currentUser?.role === 'gestor') {
       addNotification({
         title: 'Acción no permitida',
-        message: 'Los comerciales no pueden realizar compras',
+        message: 'Solo los Jefes de Proyectos pueden realizar compras',
         type: 'error'
       });
       return;

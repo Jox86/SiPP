@@ -1,5 +1,26 @@
 PENDIENTES:
 
+
+OJO******************
+
+- La plataforma será solo para comerciales o podrán acceder juridicos y economicos, y otro usuario con permiso de lectura (ej. VR)?
+
+Fin*****************
+
+
+Estructura de permisos de gestor
+- Dashboard: Todos los roles
+- Pedidos: admin, user, comercial
+- Proyectos: admin, user
+- Usuarios: solo admin
+- Reportes: admin, comercial, gestor
+- Mensajes: Todos los roles
+- Ayuda: Todos los roles
+- PerfilUsuario: Todos los roles
+
+
+
+
 -para version 2 activar y mejorar el modo oscuro comentariado en el topbar (Tooltip)
 
 -agregar modo oscuro a todas las interfaces. guiarse por los estilos del modo oscuro de la interfaz Reportes
@@ -25,50 +46,32 @@ Pedidos:
 - Los catalogos deben ordenarse empezando por los ultimos productos agregados
 - Al intentaar añadir productos desde un enlace a web y no se extraen los productos reales, en vez de mostrar varias tarjetas de productos simulados mejor que muestre una sola tarjeta con la vista previa e informacion de la Empresa/Tienda. aunque despues de cargar se quede la app offline debe mostrarse la vista previa 
 - En la vista Historial, ocultar para administrador, comercial y gestor la accion editar pedido
+- Cuando en Mensajes se queda sin procesar(elegir para comprar) un producto/servicio debe marcarse con color TAN un icono en la tabla de historial antes de N° de pedido segun el pedido realizado, si se adquiere todo entonces el icono sera verde. ambos iconos deben ser el icono de completado
+- los pedidos deben poderse editar, eliminar de toda la app por parte del user que lo haya solicitado o el admin, en ambos casos deben notificarse de forma push en la app visualmente a admin/comercial/gestor o al que creó el pedido. una vez que el estado de pedido cambia a proceso el user no puede editar ni eliminar el pedido
+- para que la interfaz Mensajes pueda extraer cierta informacion es necesario que se encuentre esto establecido en el form de pedidos extras: en los pedidos extras de servicios donde se muestran los detalles de pago, debe actualizarse el Total con el valor que agrega el admin/comercial en el formulario de enviar propuesta. la Cantidad se referira a la cantidad dias de capacitaciones que necesita el user. en servicios del formulario de pedidos se agregará en inputs, selectores y/o descripciones sugerencias en el input segun el tipo de servicios solicitados: ej. capacitacion/consultoria (cantidad de personas, cantidad de dias, fecha de inicio, online (necesita wifi, camara, computadora u otro?) o presencial ( proyector)); mantenimiento/instalacion (tipo de equipos, cantidad de equipos); desarrollo de software (tipo: sitio web, apk movil, app escritorio... añade otros). debe poderse elegir el lugar (facultad, direccion, etcetera)
 
 Usuarios:
-
-- implementar exportar PDF
-- implementar Acciones editar y eliminar
-- implementar acciones visibles solo para admin : visualizar informacion, editar datos, eliminar de la app
-- crear nuevo usuario no visible en la interfaz, nuevo rol Gestor de Proyectos: 
-    id: 'gestor_004',
-    fullName: 'Gestor de Proyectos',
-    email: 'gestor@sipp.uh.cu',
-    areaType: 'direccion', 
-    area: 'DST',
-    role: 'gestor',
-    password: 'gestor123', 
-    avatar: '/src/assets/images/users/3d-user-icon.jpg', 
-    mobile: '+53 51765567',
-    phone: '78765768'
-    
-Estructura de permisos de gestor
-- Dashboard: Todos los roles
-- Pedidos: admin, user, comercial, gestor
-- Proyectos: admin, user
-- Usuarios: solo admin
-- Reportes: admin, comercial, gestor
-- Mensajes: Todos los roles
-- Ayuda: Todos los roles
-- PerfilUsuario: Todos los roles
+- implementar exportar PDF con todos los datos de los proyectos de la tabla
 
 Proyectos:
-
-- eliminar funcionalidad de Nuevo Proyecto (despues de implementar vinculacion con Submayor y LDAP)
-- implementar exportar PDF
-- ocultar funcionalidad de Nuevo Proyecto si el usuario no es admin
-- implementar acciones visibles solo para admin : visualizar informacion, editar datos, eliminar de la app
+- El presupuesto de cada proyecto solo se actualizara cuando se vincule con Submayor.uh.cu y LDAP mas adelante
 
 Mensajes:
-
 - El buscador debe buscar segun informacion dentro de un mensaje: Empresa, informacion del producto, productos
-- Recibir mensajes desde Ayuda/soporte
-- ¿¿¿Cuando el jefe de proyecto realiza un pedido de cualquier tipo pero que corresponda a empresas distintas deben separarse los pedidos para mensajes, historial de pedidos, reportes y actas distintos???
 - Si hay mensajes de pedidos archivados mostrar en el boton Archivados la cantidad existente
 
-Reportes:
+Separar en segun los roles>:
+>Rol User:
+- Si los pedidos estan en catalogos: cuando un pedido no sea seleccionado debe mostrarse automaticamente un mensaje de solo lectura informando cual numero de pedido (N° Pedido) y la descricpion (si tiene) de por qué no fue elegido el producto/servicio 
+- Si los pedidos no estan en catalogos: el ususario recibe el mensaje de propuesta donde debe solamanente marcar las casillas de lo que quiere que se compre segun las propuestas y automaticamente se envia y actualiza en el rol admin/Comercial/Gestor. el usuario debera marcar entre denegar o pedir para que el admin/comercial reciba el cambio de estado
+>Roles Admin, Comercial:
+- Si los pedidos estan en catalogos: Los pedidos que lleguen desde la interfaz Pedidos deben poder seleccionarse todos o dejar algunos sin elegirse, para que en caso de que la empresa no posea los productos/servicios elegidos puedan reintegrarse el presupuesto a gastar y los productos en stock. en caso de que un producto/servicio no sea elegido debe aparecer un input al lado para agregar una descripcion de por que. 
+- Si los pedidos no estan en catalogos: Debe poderse responder al pedido y enviar al usuario Jefe de Proyecto que realizó el pedido una propuesta de licitación en formato de miniformulario desplegable que muestre los inputs: Empresa, Presupuesto a gastar por cada producto (los productos se llenan automaticamente segun los que puso el usuario en Pedidos extras), la fecha se llena automaticamnente segun la actuual, y el estado. Cuando el admin/comercial recibe el consentimiento o denegacion del usuario segun la propuesta debe notificarse push en la app un cambio de estado (pedir o denegar) para que el admin luego pueda seguir con el flujo de la app y cambiar el estado a completado, pendiente, en proceso o denegado y el user lo reciba
+>Rol Gestor:
+- Solo visualiza los mensajes de admin/comercial, no puede gestionarlos, ni enviar mensajes ni agregar descripciones
 
+
+Reportes:
 - Mejorar estructuracion de los graficos en todo tamaño de pantallas
 - en los graficos Distribución por Tipo, Tendencia Mensual  y Top Usuarios no se especifica si se muestran la cantidad de productos pedidos, la cantidad de presupuesto gastado, etcetera. debe msotrar informacion logica e imprescindible, sino sobra el grafico
 - el Total Solicitudes se da segun la cantidad de pedidos en Historial
@@ -76,6 +79,9 @@ Reportes:
 - Cambiar contenido de vista de Actas de conformidad a Actas para departamento economico o juridico
 - revisar contenido de pie de pagina en todos los PDF
 - separar los reportes si son de tipo diferente (tipo Productos es distinto a tipo Servicios)
+- las actas deben generarse segun los cambios en mensajes, si un mensaje muestra un producto/servicio no marcado eso quiere decir que no se mostrara en las actas para procesarlos sino que se mostrara en observaciones junto a la descripcion del producto/servicio no adquirido
+- implementar que se muestre en el pdf exportado la tabla de REPORTE DE PEDIDOS SELECCIONADOS con la informacion real registrada
+
 En doc Actas de Conformidad:
 - el subtitulo A: Departamento de Economía en **negrita** debe cambiarse por a quien vaya dirigida el acta. ej. Comité de Contratación
 - eliminar funcionalidad para Items entregados
@@ -95,4 +101,5 @@ Notificaciones:
 - mostrar notificacion push en la app, que tengan tiempo estandar de mostrarse en pantalla
 - en vez del icono verde, en las notifiacciones negativas (ej. pedido denegado) debe mostrarse un icono rojo, en las notifiaciones de pausa (ej. pedido archivado archivado) el icono debe ser amarillo o naranja
 
-
+Perfil de Usuario
+- Valorar si: Eliminar interfaz ya que se va a halar la infor de usuario desde LDAP

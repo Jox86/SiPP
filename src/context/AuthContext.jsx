@@ -262,7 +262,7 @@ export const AuthProvider = ({ children }) => {
     }
   }, [currentUser]);
 
-  //  Cambiar contraseña - VERSIÓN CORREGIDA
+  //  Cambiar contraseña 
   const changePassword = useCallback((userId, newPassword, currentPassword = null) => {
     try {
       const users = JSON.parse(localStorage.getItem('SiPP_users') || '[]');

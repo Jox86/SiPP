@@ -215,8 +215,8 @@ const PerfilUsuario = () => {
     return { total, active, completed, totalBudget };
   }, [userProjects]);
 
-  // Detectar si es admin o comercial
-  const isAdminOrCommercial = ['admin', 'comercial'].includes(currentUser?.role);
+  // Detectar si es admin, comercial o gestor
+  const isAdminOrNot = ['admin', 'comercial', 'gestor'].includes(currentUser?.role);
 
   // Obtener iniciales del usuario actual
   const userInitials = useMemo(() => {
@@ -298,7 +298,8 @@ const PerfilUsuario = () => {
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
                     {userData?.role === 'admin' ? 'Administrador' : 
-                     userData?.role === 'comercial' ? 'Usuario Comercial' : 'Jefe de Proyecto'}
+                     userData?.role === 'comercial' ? 'Usuario Comercial' : 
+                     userData?.role === 'gestor' ? 'Usuario Gestor' : 'Jefe de Proyecto'}
                   </Typography>
                 </Box>
               </Box>
@@ -430,7 +431,7 @@ const PerfilUsuario = () => {
           </Card>
 
           {/* Sección de Proyectos del Usuario - SOLO para usuarios comunes */}
-          {!isAdminOrCommercial && userProjects.length > 0 && (
+          {!isAdminOrNot && userProjects.length > 0 && (
             <Card sx={{ 
               mt: 4, 
               borderRadius: 3, 
@@ -563,7 +564,8 @@ const PerfilUsuario = () => {
                     <Typography variant="body2" color="text.secondary">Rol:</Typography>
                     <Typography variant="body2" fontWeight="medium">
                       {userData?.role === 'admin' ? 'Administrador' : 
-                      userData?.role === 'comercial' ? 'Comercial' : 'Jefe de Proyecto'}
+                      userData?.role === 'comercial' ? 'Comercial' : 
+                     userData?.role === 'gestor' ? 'Usuario Gestor' : 'Jefe de Proyecto'}
                     </Typography>
                   </Box>
                   
@@ -585,7 +587,7 @@ const PerfilUsuario = () => {
             </Card>
 
             {/* Tarjeta de Presupuesto - SOLO para usuarios comunes */}
-            {!isAdminOrCommercial && userStats.totalBudget > 0 && (
+            {!isAdminOrNot && userStats.totalBudget > 0 && (
               <Card sx={{ 
                 borderRadius: 3, 
                 boxShadow: 3,

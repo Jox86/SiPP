@@ -32,20 +32,16 @@ import {
   Grid,
   CircularProgress,
   Avatar,
-  alpha,
 } from '@mui/material';
-import { Edit as EditIcon, 
+import { 
   Delete as DeleteIcon, 
-  Search as SearchIcon, 
-  Add as AddIcon,
-  PictureAsPdf as PdfIcon
+  Search as SearchIcon,
+  PictureAsPdf as PdfIcon,
+  Visibility as ViewIcon,
+  GridOn as ExcelIcon
 } from '@mui/icons-material';
 import { useAuth } from '../../context/AuthContext';
 import { useNotifications } from '../../context/NotificationContext';
-
-// AGREGAR al inicio del archivo, después de los otros imports:
-import { jsPDF } from 'jspdf';
-import 'jspdf-autotable';
 
 const Proyectos = () => {
   const theme = useTheme();
@@ -53,14 +49,12 @@ const Proyectos = () => {
   const { currentUser } = useAuth();
   const { addNotification } = useNotifications();
 
-  // Nueva paleta de colores
+  // Colores simplificados
   const colors = {
-    borgundy: '#4E0101',
-    tan: '#d2b48c',
-    sapphire: '#667080',
-    swanWhite: '#F5F0E9',
-    shellstone: '#D9CBC2',
-    error: '#ca0000ff',
+    primary: '#4E0101',
+    secondary: '#667080',
+    light: '#F5F0E9',
+    border: '#D9CBC2',
   };
 
   // Estado local
@@ -74,8 +68,10 @@ const Proyectos = () => {
 
   // Estado del diálogo
   const [openDialog, setOpenDialog] = useState(false);
+  const [openViewDialog, setOpenViewDialog] = useState(false);
   const [editingProject, setEditingProject] = useState(null);
-  const [form, setForm] = useState({
+  const [viewingProject, setViewingProject] = useState(null);
+    const [form, setForm] = useState({
     name: '',
     description: '',
     budget: '',
@@ -86,27 +82,33 @@ const Proyectos = () => {
     ownerId: '',
     costCenter: '', 
     projectNumber: '', 
-  });
+  })
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
+
+  // Verificar si el usuario es admin
+  const isAdmin = currentUser?.role === 'admin';
 
   // Cargar todos los proyectos y usuarios del sistema 
   useEffect(() => {
     const loadAllData = () => {
       try {
-        // CORREGIDO: Usar la misma clave que Usuarios.jsx
         const users = JSON.parse(localStorage.getItem('SiPP_users') || '[]');
         setAllUsers(users);
-        console.log('Usuarios cargados en Proyectos:', users.length);
 
         // Cargar proyectos de todos los usuarios
         const allProjectsData = [];
         users.forEach(user => {
           const userProjects = JSON.parse(localStorage.getItem(`SiPP_projects_${user.id}`) || '[]');
-          allProjectsData.push(...userProjects);
+          userProjects.forEach(project => {
+            allProjectsData.push({
+              ...project,
+              ownerName: user.fullName,
+              ownerEmail: user.email
+            });
+          });
         });
         setAllProjects(allProjectsData);
-        console.log('Proyectos cargados:', allProjectsData.length);
       } catch (error) {
         console.error('Error al cargar datos:', error);
       }
@@ -123,6 +125,65 @@ const Proyectos = () => {
     return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
 
+  useEffect(() => {
+  const loadAllData = () => {
+    try {
+      const users = JSON.parse(localStorage.getItem('SiPP_users') || '[]');
+      setAllUsers(users);
+
+      // Cargar proyectos de todos los usuarios
+      const allProjectsData = [];
+      users.forEach(user => {
+        const userProjects = JSON.parse(localStorage.getItem(`SiPP_projects_${user.id}`) || '[]');
+        
+        // Si el usuario no tiene proyectos, crear uno de prueba automáticamente
+        if (userProjects.length === 0 && user.role === 'user') {
+          const testProject = {
+            id: `proj_test_${user.id}`,
+            costCenter: '100001',
+            projectNumber: `DEMO${user.id.slice(0, 4).toUpperCase()}`,
+            name: 'Proyecto de Demostración',
+            description: 'Proyecto asignado automáticamente para demostración del sistema',
+            budget: 50000,
+            areaType: 'facultad',
+            area: user.area || 'Matemática y Computación',
+            endDate: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 60 días desde hoy
+            status: 'active',
+            ownerId: user.id,
+            ownerName: user.fullName,
+            ownerEmail: user.email,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          };
+          
+          userProjects.push(testProject);
+          localStorage.setItem(`SiPP_projects_${user.id}`, JSON.stringify(userProjects));
+        }
+        
+        userProjects.forEach(project => {
+          allProjectsData.push({
+            ...project,
+            ownerName: user.fullName,
+            ownerEmail: user.email
+          });
+        });
+      });
+      setAllProjects(allProjectsData);
+    } catch (error) {
+      console.error('Error al cargar datos:', error);
+    }
+  };
+
+  loadAllData();
+
+  const handleStorageChange = () => {
+    loadAllData();
+  };
+  
+  window.addEventListener('storage', handleStorageChange);
+  return () => window.removeEventListener('storage', handleStorageChange);
+}, []);
+
   // Obtener áreas únicas para el filtro
   const uniqueAreas = useMemo(() => {
     const areas = allProjects
@@ -131,9 +192,9 @@ const Proyectos = () => {
     return [...new Set(areas)].sort();
   }, [allProjects]);
 
-  // Obtener usuarios únicos para el filtro (solo para admin/comercial)
+  // Obtener usuarios únicos para el filtro (solo para admin)
   const uniqueUsers = useMemo(() => {
-    if (!['admin', 'comercial'].includes(currentUser?.role)) return [];
+    if (!['admin'].includes(currentUser?.role)) return [];
     
     const users = allProjects
       .map(p => ({ id: p.ownerId, name: p.ownerName }))
@@ -150,21 +211,17 @@ const Proyectos = () => {
 
   // Filtrar y ordenar proyectos según el rol del usuario
   const filteredProjects = useMemo(() => {
-    // Filtrar proyectos según el rol del usuario
     let filtered = allProjects.filter((p) => {
-      // Si es administrador o comercial, puede ver todos los proyectos
-      if (['admin', 'comercial'].includes(currentUser?.role)) return true;
-      // Si no, solo puede ver sus propios proyectos
+      if (['admin'].includes(currentUser?.role)) return true;
       return p.ownerId === currentUser?.id;
     });
 
     // Aplicar filtros de búsqueda
     filtered = filtered.filter((p) =>
-      p.name.toLowerCase().includes(filter.toLowerCase()) ||
+      p.costCenter?.toString().includes(filter) ||
+      p.projectNumber?.toLowerCase().includes(filter.toLowerCase()) ||
       p.area?.toLowerCase().includes(filter.toLowerCase()) ||
-      p.ownerName?.toLowerCase().includes(filter.toLowerCase()) ||
-      p.costCenter?.toString().includes(filter) || //  BUSCAR POR CENTRO DE COSTO
-      p.projectNumber?.toLowerCase().includes(filter.toLowerCase()) //  BUSCAR POR NÚMERO DE PROYECTO
+      p.ownerName?.toLowerCase().includes(filter.toLowerCase())
     );
 
     // Aplicar filtro de área
@@ -172,8 +229,8 @@ const Proyectos = () => {
       filtered = filtered.filter((p) => p.area === areaFilter);
     }
 
-    // Aplicar filtro de usuario (solo para admin/comercial)
-    if (userFilter !== 'all' && ['admin', 'comercial'].includes(currentUser?.role)) {
+    // Aplicar filtro de usuario (solo para admin)
+    if (userFilter !== 'all' && ['admin'].includes(currentUser?.role)) {
       filtered = filtered.filter((p) => p.ownerId === userFilter);
     }
 
@@ -187,111 +244,122 @@ const Proyectos = () => {
     setPage(0);
   };
 
-  // AGREGAR esta función después de las otras funciones (después de handleDeleteProject):
+  // Función para exportar proyectos a PDF - SIMPLIFICADA Y FUNCIONAL
+  const handleExportPDF = useCallback(() => {
+    try {
+      if (filteredProjects.length === 0) {
+        addNotification({
+          title: 'No hay datos',
+          message: 'No hay proyectos para exportar',
+          type: 'warning'
+        });
+        return;
+      }
 
-// Función para exportar proyectos a PDF
-const handleExportPDF = () => {
-  try {
-    const doc = new jsPDF();
-    
-    // Configuración del documento
-    doc.setFontSize(18);
-    doc.setTextColor(78, 1, 1); // Color borgundy
-    doc.text('Sistema SiPP - Reporte de Proyectos', 14, 22);
+      // Importar jsPDF dinámicamente
+      import('jspdf').then(({ jsPDF }) => {
+        import('jspdf-autotable').then((autoTableModule) => {
+          const { default: autoTable } = autoTableModule;
+          
+          const doc = new jsPDF('landscape');
+          
+          // Título
+          doc.setFontSize(16);
+          doc.setTextColor(78, 1, 1);
+          doc.text('Reporte de Proyectos - Sistema SiPP', 14, 15);
 
-    doc.setFontSize(12);
-    doc.setTextColor(102, 112, 128); // Color sapphire
-    doc.text(`Fecha: ${new Date().toLocaleDateString()}`, 14, 32);
-    doc.text(`Total de proyectos: ${filteredProjects.length}`, 14, 42);
+          // Información del reporte
+          doc.setFontSize(10);
+          doc.setTextColor(100, 100, 100);
+          doc.text(`Fecha: ${new Date().toLocaleDateString()}`, 14, 25);
+          doc.text(`Total: ${filteredProjects.length} proyectos`, 14, 32);
+          doc.text(`Generado por: ${currentUser?.fullName || currentUser?.email}`, 14, 39);
 
-    // Datos de la tabla
-    const tableData = filteredProjects.map((project) => [
-      project.costCenter || 'N/A',
-      project.projectNumber || 'N/A',
-      project.ownerName || 'Sin asignar',
-      project.area || 'N/A',
-      `$${(project.budget || 0).toLocaleString()} CUP`,
-      project.endDate ? new Date(project.endDate).toLocaleDateString() : 'N/A',
-      getStatusLabel(project.status)
-    ]);
+          // Preparar datos de la tabla
+          const tableData = filteredProjects.map((project) => [
+            project.costCenter || 'N/A',
+            project.projectNumber || 'N/A',
+            project.ownerName || 'Sin asignar',
+            project.area || 'N/A',
+            `$${parseFloat(project.budget || 0).toLocaleString('es-ES')} CUP`,
+            project.endDate ? new Date(project.endDate).toLocaleDateString('es-ES') : 'N/A',
+            getStatusLabel(project.status)
+          ]);
 
-    // Generar tabla
-    doc.autoTable({
-      head: [
-        [
-          'Centro de Costo',
-          'Número',
-          'Jefe de Proyecto', 
-          'Área',
-          'Presupuesto',
-          'Fecha Final',
-          'Estado'
-        ]
-      ],
-      body: tableData,
-      startY: 50,
-      theme: 'grid',
-      styles: { 
-        fontSize: 9,
-        cellPadding: 3,
-        textColor: [0, 0, 0]
-      },
-      headStyles: { 
-        fillColor: [78, 1, 1], // Color borgundy
-        textColor: [255, 255, 255],
-        fontStyle: 'bold',
-        halign: 'center'
-      },
-      columnStyles: {
-        0: { cellWidth: 25 }, // Centro de Costo
-        1: { cellWidth: 25 }, // Número
-        2: { cellWidth: 30 }, // Jefe de Proyecto
-        3: { cellWidth: 25 }, // Área
-        4: { cellWidth: 25 }, // Presupuesto
-        5: { cellWidth: 25 }, // Fecha Final
-        6: { cellWidth: 20 }  // Estado
-      },
-      margin: { left: 14, right: 14 }
-    });
+          // Generar tabla
+          autoTable(doc, {
+            startY: 45,
+            head: [[
+              'Centro Costo',
+              'Número',
+              'Jefe Proyecto',
+              'Área',
+              'Presupuesto',
+              'Fecha Final',
+              'Estado'
+            ]],
+            body: tableData,
+            theme: 'grid',
+            headStyles: {
+              fillColor: [78, 1, 1],
+              textColor: [255, 255, 255],
+              fontStyle: 'bold',
+              fontSize: 10
+            },
+            styles: {
+              fontSize: 9,
+              cellPadding: 3,
+              overflow: 'linebreak'
+            },
+            columnStyles: {
+              0: { cellWidth: 25 },
+              1: { cellWidth: 25 },
+              2: { cellWidth: 35 },
+              3: { cellWidth: 30 },
+              4: { cellWidth: 30 },
+              5: { cellWidth: 25 },
+              6: { cellWidth: 20 }
+            },
+            margin: { left: 14, right: 14 }
+          });
 
-    // Información adicional
-    const finalY = doc.lastAutoTable.finalY + 10;
-    if (finalY < 280) {
-      doc.setFontSize(10);
-      doc.setTextColor(100, 100, 100);
-      doc.text('Sistema SiPP - Gestión de Proyectos', 14, finalY);
+          // Guardar archivo
+          const fileName = `proyectos_${new Date().toISOString().split('T')[0]}.pdf`;
+          doc.save(fileName);
+          
+          addNotification({
+            title: 'PDF exportado',
+            message: `Se ha descargado el reporte con ${filteredProjects.length} proyectos`,
+            type: 'success'
+          });
+        });
+      }).catch(error => {
+        console.error('Error al cargar jsPDF:', error);
+        addNotification({
+          title: 'Error',
+          message: 'No se pudo cargar la biblioteca de PDF',
+          type: 'error'
+        });
+      });
+      
+    } catch (error) {
+      console.error('Error al generar PDF:', error);
+      addNotification({
+        title: 'Error',
+        message: 'No se pudo generar el reporte PDF',
+        type: 'error'
+      });
     }
-
-    // Guardar archivo
-    doc.save(`proyectos_sipp_${new Date().toISOString().split('T')[0]}.pdf`);
-    
-    addNotification({
-      title: 'PDF generado',
-      message: `El reporte de ${filteredProjects.length} proyectos se ha descargado correctamente`,
-      type: 'success'
-    });
-    
-  } catch (error) {
-    console.error('Error al generar PDF:', error);
-    addNotification({
-      title: 'Error',
-      message: 'No se pudo generar el reporte PDF',
-      type: 'error'
-    });
-  }
-};
+  }, [filteredProjects, currentUser, addNotification]);
 
   // Cálculo de gastos reales del presupuesto
   const getRealExpenses = useCallback((projectId) => {
     try {
-      // Cargar todos los pedidos del sistema
       const purchases = JSON.parse(localStorage.getItem('OASiS_purchases') || '[]');
       const specialOrders = JSON.parse(localStorage.getItem('OASiS_special_orders') || '[]');
       
-      // Combinar todos los pedidos
       const allOrders = [...purchases, ...specialOrders];
       
-      // Filtrar pedidos del proyecto y sumar totales
       const projectOrders = allOrders.filter(order => 
         order.projectId === projectId || order.project === allProjects.find(p => p.id === projectId)?.name
       );
@@ -314,113 +382,172 @@ const handleExportPDF = () => {
     return budget - totalSpent;
   }, [getRealExpenses]);
 
-  // Diálogo Editar Proyecto
-  const handleOpenDialog = (project = null) => {
-  // Solo permitir abrir el diálogo si el usuario tiene permisos
-  if (project && project.ownerId !== currentUser?.id && !['admin', 'comercial'].includes(currentUser?.role)) {
-    addNotification({
-      title: 'Acceso denegado',
-      message: 'No tienes permisos para editar este proyecto.',
-      type: 'error'
-    });
-    return;
-  }
-  
-  if (project) {
-    setEditingProject(project);
-    setForm({
-      name: project.name,
-      description: project.description || '',
-      budget: project.budget || '',
-      areaType: project.areaType || '',
-      area: project.area || '',
-      endDate: project.endDate || '',
-      status: project.status || 'active',
-      ownerId: project.ownerId || currentUser?.id,
-      costCenter: project.costCenter || '', 
-      projectNumber: project.projectNumber || '', 
-    });
-  } else {
-    setEditingProject(null);
-    setForm({
-      name: '',
-      description: '',
-      budget: '',
-      areaType: '',
-      area: '',
-      endDate: '',
-      status: 'active',
-      ownerId: currentUser?.id || '', //  Asegurar que tenga el ID del usuario actual
-      costCenter: '', 
-      projectNumber: '', 
-    });
-  }
-  setErrors({});
-  setOpenDialog(true);
-};
+  // Función para exportar a Excel
+  const handleExportExcel = useCallback(() => {
+    try {
+      if (filteredProjects.length === 0) {
+        addNotification({
+          title: 'No hay datos',
+          message: 'No hay proyectos para exportar',
+          type: 'warning'
+        });
+        return;
+      }
 
-  const handleCloseDialog = () => {
-    setOpenDialog(false);
-    setEditingProject(null);
-  };
+      // Crear contenido CSV
+      const headers = [
+        'Centro de Costo',
+        'Número de Proyecto',
+        'Jefe de Proyecto',
+        'Email Jefe',
+        'Área',
+        'Tipo de Área',
+        'Presupuesto (CUP)',
+        'Presupuesto Gastado (CUP)',
+        'Presupuesto Restante (CUP)',
+        'Fecha Final',
+        'Estado',
+        'Fecha de Creación',
+        'Última Actualización',
+      ];
 
-  //  VALIDACIÓN ACTUALIZADA CON NUEVOS CAMPOS
-const validateForm = useCallback(() => {
-  const newErrors = {};
-  
-  //  Centro de costo es obligatorio y debe ser numérico
-  if (!form.costCenter || !/^\d+$/.test(form.costCenter)) {
-    newErrors.costCenter = 'Centro de costo es requerido y debe contener solo números';
-  }
-  
-  //  Número de proyecto es obligatorio y debe ser alfanumérico
-  if (!form.projectNumber || !/^[a-zA-Z0-9\-_]+$/.test(form.projectNumber)) {
-    newErrors.projectNumber = 'Número de proyecto es requerido y debe ser alfanumérico';
-  }
-  
-  if (!form.budget || isNaN(form.budget) || form.budget <= 0) {
-    newErrors.budget = 'Presupuesto válido es requerido';
-  }
-  
-  if (!form.endDate) {
-    newErrors.endDate = 'Fecha de fin es requerida';
-  }
-  
-  // Validar que la fecha final no sea anterior a la fecha actual
-  if (form.endDate) {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const endDate = new Date(form.endDate);
-    if (endDate < today) {
-      newErrors.endDate = 'La fecha final no puede ser anterior a la fecha actual';
-    }
-  }
+      const rows = filteredProjects.map(project => {
+        const gastado = getRealExpenses(project.id);
+        const restante = getRemainingBudget(project);
+        
+        return [
+          project.costCenter || '',
+          project.projectNumber || '',
+          project.ownerName || '',
+          project.ownerEmail || '',
+          project.area || '',
+          project.areaType || '',
+          parseFloat(project.budget || 0).toLocaleString('es-ES'),
+          gastado.toLocaleString('es-ES', { minimumFractionDigits: 2 }),
+          restante.toLocaleString('es-ES', { minimumFractionDigits: 2 }),
+          project.endDate ? new Date(project.endDate).toLocaleDateString('es-ES') : '',
+          getStatusLabel(project.status),
+          project.createdAt ? new Date(project.createdAt).toLocaleDateString('es-ES') : '',
+          project.updatedAt ? new Date(project.updatedAt).toLocaleDateString('es-ES') : '',
+          (project.description || '').replace(/"/g, '""') // Escapar comillas dobles
+        ];
+      });
 
-  if (!form.areaType) newErrors.areaType = 'Tipo de área es requerido';
-  if (!form.area) newErrors.area = 'Área es requerida';
-  
-  // Solo validar ownerId si el usuario es admin/comercial
-  if (['admin', 'comercial'].includes(currentUser?.role) && !form.ownerId) {
-    newErrors.ownerId = 'Debe seleccionar un jefe de proyecto';
-  }
+      // Convertir a CSV
+      const csvContent = [
+        headers.join(','),
+        ...rows.map(row => 
+          row.map(cell => 
+            typeof cell === 'string' && cell.includes(',') ? `"${cell}"` : cell
+          ).join(',')
+        )
+      ].join('\n');
 
-  setErrors(newErrors);
-  return Object.keys(newErrors).length === 0;
-}, [form, currentUser?.role]);
+      // Crear blob y descargar
+      const blob = new Blob(['\ufeff' + csvContent], { 
+        type: 'text/csv;charset=utf-8;' 
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `proyectos_${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
 
-  // Función para guardar proyecto (crear o actualizar)
-  const handleSaveProject = useCallback(async () => {
-    if (!validateForm()) return;
-
-    // Verificar permisos para editar
-    if (editingProject && editingProject.ownerId !== currentUser?.id && !['admin', 'comercial'].includes(currentUser?.role)) {
       addNotification({
-        title: 'Acceso denegado',
-        message: 'No tienes permisos para editar este proyecto.',
+        title: 'Excel exportado',
+        message: `Se ha descargado el archivo con ${filteredProjects.length} proyectos`,
+        type: 'success'
+      });
+
+    } catch (error) {
+      console.error('Error al exportar Excel:', error);
+      addNotification({
+        title: 'Error',
+        message: 'No se pudo generar el archivo Excel',
         type: 'error'
       });
-      return;
     }
+  }, [filteredProjects, getRealExpenses, getRemainingBudget, addNotification]);
+
+  // Función para ver detalles del proyecto
+  const handleViewProject = (project) => {
+    setViewingProject(project);
+    setOpenViewDialog(true);
+  };
+
+  const handleCloseViewDialog = () => {
+    setOpenViewDialog(false);
+    setViewingProject(null);
+  };
+
+  // Manejar cambio en campos numéricos (centro de costo)
+  const handleCostCenterChange = (e) => {
+    const value = e.target.value;
+    // Solo permite números
+    if (/^\d*$/.test(value)) {
+      setForm({ ...form, costCenter: value });
+    }
+  };
+
+  // Manejar cambio en número de proyecto
+  const handleProjectNumberChange = (e) => {
+    const value = e.target.value.toUpperCase();
+    // Permite letras, números, guiones y guiones bajos
+    if (/^[A-Z0-9\-_]*$/.test(value)) {
+      setForm({ ...form, projectNumber: value });
+    }
+  };
+
+  // Validación del formulario
+  const validateForm = useCallback(() => {
+    const newErrors = {};
+    
+    if (!form.costCenter || form.costCenter.trim() === '') {
+      newErrors.costCenter = 'Centro de costo es requerido';
+    } else if (!/^\d+$/.test(form.costCenter)) {
+      newErrors.costCenter = 'Debe contener solo números';
+    }
+    
+    if (!form.projectNumber || form.projectNumber.trim() === '') {
+      newErrors.projectNumber = 'Número de proyecto es requerido';
+    } else if (!/^[A-Z0-9\-_]+$/.test(form.projectNumber)) {
+      newErrors.projectNumber = 'Debe ser alfanumérico (A-Z, 0-9, -, _)';
+    }
+    
+    if (!form.budget || isNaN(form.budget) || form.budget <= 0) {
+      newErrors.budget = 'Presupuesto válido es requerido';
+    }
+    
+    if (!form.endDate) {
+      newErrors.endDate = 'Fecha de fin es requerida';
+    } else {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const endDate = new Date(form.endDate);
+      if (endDate < today) {
+        newErrors.endDate = 'La fecha final no puede ser anterior a hoy';
+      }
+    }
+
+    if (!form.areaType) newErrors.areaType = 'Tipo de área es requerido';
+    if (!form.area) newErrors.area = 'Área es requerida';
+    
+    if (!form.ownerId) {
+      newErrors.ownerId = 'Debe seleccionar un jefe de proyecto';
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  }, [form]);
+
+  // Función para guardar proyecto (solo admin)
+  const handleSaveProject = useCallback(async () => {
+    if (!isAdmin) return;
+    
+    if (!validateForm()) return;
 
     setLoading(true);
     try {
@@ -432,24 +559,24 @@ const validateForm = useCallback(() => {
       const projectData = {
         ...form,
         budget: parseFloat(form.budget),
-        costCenter: form.costCenter, 
-        projectNumber: form.projectNumber, 
+        costCenter: form.costCenter,
+        projectNumber: form.projectNumber,
         id: editingProject?.id || `proj_${Date.now()}`,
         ownerId: form.ownerId,
         ownerName: selectedUser.fullName,
+        ownerEmail: selectedUser.email,
         areaType: form.areaType,
         area: form.area,
         updatedAt: new Date().toISOString(),
         createdAt: editingProject?.createdAt || new Date().toISOString(),
       };
 
-      // Guardar en el localStorage del usuario correspondiente
+      // Guardar en localStorage
       const userProjectsKey = `SiPP_projects_${form.ownerId}`;
       const existingProjects = JSON.parse(localStorage.getItem(userProjectsKey) || '[]');
 
       let updatedProjects;
       if (editingProject) {
-        // Si estamos editando y cambió el dueño, eliminar del dueño anterior y agregar al nuevo
         if (editingProject.ownerId !== form.ownerId) {
           const previousOwnerKey = `SiPP_projects_${editingProject.ownerId}`;
           const previousOwnerProjects = JSON.parse(localStorage.getItem(previousOwnerKey) || '[]');
@@ -470,13 +597,19 @@ const validateForm = useCallback(() => {
       const allProjectsData = [];
       allUsers.forEach(user => {
         const userProjs = JSON.parse(localStorage.getItem(`SiPP_projects_${user.id}`) || '[]');
-        allProjectsData.push(...userProjs);
+        userProjs.forEach(project => {
+          allProjectsData.push({
+            ...project,
+            ownerName: user.fullName,
+            ownerEmail: user.email
+          });
+        });
       });
       setAllProjects(allProjectsData);
 
       addNotification({
         title: editingProject ? 'Proyecto actualizado' : 'Proyecto creado',
-        message: `Proyecto ${projectData.costCenter} - ${projectData.projectNumber} fue ${editingProject ? 'actualizado' : 'creado'} correctamente.`,
+        message: `Proyecto ${projectData.costCenter} - ${projectData.projectNumber} guardado correctamente.`,
         type: 'success'
       });
 
@@ -491,25 +624,16 @@ const validateForm = useCallback(() => {
     } finally {
       setLoading(false);
     }
-  }, [form, validateForm, editingProject, currentUser, allUsers, addNotification]);
+  }, [form, validateForm, editingProject, isAdmin, allUsers, addNotification]);
 
-  // Función para eliminar proyecto
+  // Función para eliminar proyecto (solo admin)
   const handleDeleteProject = async (project) => {
-    // Verificar permisos para eliminar
-    if (project.ownerId !== currentUser?.id && !['admin', 'comercial'].includes(currentUser?.role)) {
-      addNotification({
-        title: 'Acceso denegado',
-        message: 'No tienes permisos para eliminar este proyecto.',
-        type: 'error'
-      });
-      return;
-    }
+    if (!isAdmin) return;
 
-    if (!window.confirm(`¿Eliminar el proyecto "${project.costCenter} - ${project.projectNumber}"? Esta acción no se puede deshacer.`)) return;
+    if (!window.confirm(`¿Eliminar el proyecto "${project.costCenter} - ${project.projectNumber}"?`)) return;
 
     setLoading(true);
     try {
-      // Eliminar del localStorage del dueño
       const userProjectsKey = `SiPP_projects_${project.ownerId}`;
       const existingProjects = JSON.parse(localStorage.getItem(userProjectsKey) || '[]');
       const updatedProjects = existingProjects.filter(p => p.id !== project.id);
@@ -519,7 +643,13 @@ const validateForm = useCallback(() => {
       const allProjectsData = [];
       allUsers.forEach(user => {
         const userProjs = JSON.parse(localStorage.getItem(`SiPP_projects_${user.id}`) || '[]');
-        allProjectsData.push(...userProjs);
+        userProjs.forEach(proj => {
+          allProjectsData.push({
+            ...proj,
+            ownerName: user.fullName,
+            ownerEmail: user.email
+          });
+        });
       });
       setAllProjects(allProjectsData);
 
@@ -559,48 +689,37 @@ const validateForm = useCallback(() => {
     }
   };
 
-  // Verificar si el usuario puede gestionar el proyecto
-const canManageProject = (project) => {
-  return project.ownerId === currentUser?.id || ['admin', 'comercial'].includes(currentUser?.role);
-};
-
-  // Obtener usuarios para el selector (solo usuarios normales, no admin/comercial)
+  // Obtener usuarios para el selector
   const availableUsers = useMemo(() => {
-    return allUsers.filter(user => 
-      user.role !== 'admin' && user.role !== 'comercial'
-    );
+    return allUsers.filter(user => user.role !== 'admin');
   }, [allUsers]);
 
   return (
     <Box sx={{ 
-      p: isMobile ? 2 : 4,
-      backgroundColor: colors.paper,
+      p: isMobile ? 2 : 3,
+      backgroundColor: 'background.default',
       minHeight: '100vh',
-      marginTop: isMobile ? '10%' : 3, 
     }}>
       <Typography 
         variant="h4" 
         gutterBottom 
         fontWeight="bold" 
         sx={{
-          color: theme.palette.mode === 'dark' ? colors.swanWhite : colors.borgundy,
-          mb: 3
+          color: colors.primary,
+          mb: 3,
+          mt: 3
         }}
       >
         Gestión de Proyectos
       </Typography>
 
-      {/*  PAPER CON EFECTO GLASS */}
+      {/* Panel de filtros */}
       <Paper sx={{ 
-        p: 3, 
+        p: 2, 
         mb: 3, 
-        borderRadius: 3,
-        background: theme.palette.mode === 'dark'
-          ? `linear-gradient(135deg, ${alpha(colors.sapphire, 0.15)} 0%, ${alpha(colors.borgundy, 0.1)} 100%)`
-          : `linear-gradient(135deg, ${colors.swanWhite} 0%, ${colors.shellstone}20 100%)`,
-        backdropFilter: 'blur(10px)',
-        border: `1px solid ${alpha(theme.palette.divider, 0.2)}`,
-        boxShadow: '0 8px 32px rgba(0,0,0,0.1)',
+        borderRadius: 2,
+        backgroundColor: 'background.paper',
+        border: `1px solid ${colors.border}`,
       }}>
         <Box
           sx={{
@@ -618,20 +737,17 @@ const canManageProject = (project) => {
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
             InputProps={{
-              startAdornment: <SearchIcon sx={{ color: colors.sapphire, mr: 1 }} />,
+              startAdornment: <SearchIcon sx={{ color: colors.secondary, mr: 1 }} />,
             }}
             sx={{ 
               flexGrow: 1, 
               maxWidth: isMobile ? '100%' : 300,
-              '& .MuiOutlinedInput-root': {
-                backgroundColor: colors.swanWhite,
-                '&:hover fieldset': { borderColor: colors.sapphire },
-              }
+              backgroundColor: 'white',
             }}
           />
 
           <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
-            {/*  AGREGAR botón de exportar PDF */}
+            {/* Botones de exportación */}
             <Button
               startIcon={<PdfIcon />}
               onClick={handleExportPDF}
@@ -639,19 +755,33 @@ const canManageProject = (project) => {
               size="small"
               disabled={filteredProjects.length === 0}
               sx={{
-                color: colors.sapphire,
-                borderColor: colors.sapphire,
+                color: colors.secondary,
+                borderColor: colors.secondary,
                 '&:hover': {
-                  backgroundColor: alpha(colors.sapphire, 0.1),
-                  borderColor: colors.sapphire,
+                  backgroundColor: 'rgba(102, 112, 128, 0.1)',
+                  borderColor: colors.secondary,
                 },
-                '&:disabled': {
-                  color: colors.shellstone,
-                  borderColor: colors.shellstone,
-                }
               }}
             >
-              Exportar PDF
+              PDF
+            </Button>
+
+            <Button
+              startIcon={<ExcelIcon />}
+              onClick={handleExportExcel}
+              variant="outlined"
+              size="small"
+              disabled={filteredProjects.length === 0}
+              sx={{
+                color: '#217346',
+                borderColor: '#217346',
+                '&:hover': {
+                  backgroundColor: 'rgba(33, 115, 70, 0.1)',
+                  borderColor: '#217346',
+                },
+              }}
+            >
+              Excel
             </Button>
 
             {/* Filtro por área */}
@@ -669,8 +799,8 @@ const canManageProject = (project) => {
               ))}
             </TextField>
 
-            {/* Filtro por usuario (solo para admin/comercial) */}
-            {['admin', 'comercial'].includes(currentUser?.role) && (
+            {/* Filtro por usuario (solo para admin) */}
+            {['admin'].includes(currentUser?.role) && (
               <TextField
                 select
                 label="Filtrar por usuario"
@@ -694,33 +824,27 @@ const canManageProject = (project) => {
           No se encontraron proyectos con los filtros aplicados.
         </Alert>
       ) : (
-        //  TABLA CON EFECTO GLASS
+        // Tabla de proyectos
         <Paper sx={{ 
-          borderRadius: 3, 
-          boxShadow: '0 8px 32px rgba(0,0,0,0.1)',
+          borderRadius: 2,
           overflow: 'hidden',
-          background: theme.palette.mode === 'dark'
-            ? `linear-gradient(135deg, ${alpha(colors.swanWhite, 0.15)} 0%, ${alpha(colors.borgundy, 0.1)} 100%)`
-            : `linear-gradient(135deg, ${colors.swanWhite} 0%, ${colors.shellstone}20 100%)`,
-          backdropFilter: 'blur(10px)',
-          border: `1px solid ${alpha(theme.palette.divider, 0.2)}`,
+          backgroundColor: 'background.paper',
+          border: `1px solid ${colors.border}`,
         }}>
           <TableContainer>
             <Table size={isMobile ? 'small' : 'medium'}>
               <TableHead sx={{ 
-                backgroundColor: theme.palette.mode === 'dark' 
-                  ? alpha(colors.borgundy, 0.3) 
-                  : alpha(colors.borgundy, 0.1) 
+                backgroundColor: 'rgba(78, 1, 1, 0.05)' 
               }}>
                 <TableRow>
-                  <TableCell sx={{ fontWeight: 600, color: colors.borgundy }}>Centro de Costo</TableCell>
-                  <TableCell sx={{ fontWeight: 600, color: colors.borgundy }}>Número</TableCell>
-                  <TableCell sx={{ fontWeight: 600, color: colors.borgundy }}>Jefe de Proyecto</TableCell>
-                  <TableCell sx={{ fontWeight: 600, color: colors.borgundy }}>Área</TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 600, color: colors.borgundy }}>Presupuesto</TableCell>
-                  <TableCell sx={{ fontWeight: 600, color: colors.borgundy }}>Fecha Final</TableCell>
-                  <TableCell sx={{ fontWeight: 600, color: colors.borgundy }}>Estado</TableCell>
-                  <TableCell align="center" sx={{ fontWeight: 600, color: colors.borgundy }}>Acciones</TableCell>
+                  <TableCell sx={{ fontWeight: 600, color: colors.primary }}>Centro Costo</TableCell>
+                  <TableCell sx={{ fontWeight: 600, color: colors.primary }}>Número</TableCell>
+                  <TableCell sx={{ fontWeight: 600, color: colors.primary }}>Jefe Proyecto</TableCell>
+                  <TableCell sx={{ fontWeight: 600, color: colors.primary }}>Área</TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 600, color: colors.primary }}>Presupuesto</TableCell>
+                  <TableCell sx={{ fontWeight: 600, color: colors.primary }}>Fecha Final</TableCell>
+                  <TableCell sx={{ fontWeight: 600, color: colors.primary }}>Estado</TableCell>
+                  <TableCell align="center" sx={{ fontWeight: 600, color: colors.primary }}>Acciones</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -729,11 +853,11 @@ const canManageProject = (project) => {
                   .map((project) => {
                     const remainingBudget = getRemainingBudget(project);
                     const totalSpent = getRealExpenses(project.id);
-                    const canManage = canManageProject(project);
+                    
                     return (
                       <TableRow key={project.id} hover>
                         <TableCell>
-                          <Typography variant="body2" fontWeight="bold" color={colors.borgundy}>
+                          <Typography variant="body2" fontWeight="bold" color={colors.primary}>
                             {project.costCenter || 'N/A'}
                           </Typography>
                         </TableCell>
@@ -746,13 +870,14 @@ const canManageProject = (project) => {
                         <TableCell>
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                             <Avatar 
-                              src={allUsers.find(u => u.id === project.ownerId)?.avatar} 
-                              sx={{ width: 32, height: 32 }}
-                              onError={(e) => {
-                                e.target.src = '/src/assets/images/users/3d-user-icon.jpg';
+                              sx={{ 
+                                width: 32, 
+                                height: 32,
+                                backgroundColor: 'rgba(78, 1, 1, 0.1)',
+                                color: colors.primary
                               }}
                             >
-                              {project.ownerName?.charAt(0)}
+                              {project.ownerName?.charAt(0) || '?'}
                             </Avatar>
                             <Typography variant="body2">
                               {project.ownerName || 'Sin asignar'}
@@ -761,19 +886,22 @@ const canManageProject = (project) => {
                         </TableCell>
                         <TableCell>{project.area || 'N/A'}</TableCell>
                         <TableCell align="right">
-                          <Typography variant="body2" fontWeight="bold" color={colors.borgundy}>
-                            ${(project.budget || 0).toLocaleString()} CUP
+                          <Typography variant="body2" fontWeight="bold" color={colors.primary}>
+                            ${parseFloat(project.budget || 0).toLocaleString('es-ES')} CUP
                           </Typography>
-                          <Typography variant="caption" color={remainingBudget < 0 ? 'error.main' : 'text.secondary'}>
-                            Gastado: ${totalSpent.toFixed(2)} CUP
+                          <Typography variant="caption" color="text.secondary" display="block">
+                            Gastado: ${totalSpent.toLocaleString('es-ES', { minimumFractionDigits: 2 })} CUP
                           </Typography>
-                          <Typography variant="caption" color={remainingBudget < 0 ? 'error.main' : colors.sapphire} display="block">
-                            Restante: ${remainingBudget.toFixed(2)} CUP
+                          <Typography variant="caption" 
+                            color={remainingBudget < 0 ? 'error.main' : colors.secondary} 
+                            display="block"
+                          >
+                            Restante: ${remainingBudget.toLocaleString('es-ES', { minimumFractionDigits: 2 })} CUP
                           </Typography>
                         </TableCell>
                         <TableCell>
                           <Typography variant="body2">
-                            {project.endDate ? new Date(project.endDate).toLocaleDateString() : 'N/A'}
+                            {project.endDate ? new Date(project.endDate).toLocaleDateString('es-ES') : 'N/A'}
                           </Typography>
                         </TableCell>
                         <TableCell>
@@ -781,45 +909,37 @@ const canManageProject = (project) => {
                             label={getStatusLabel(project.status)}
                             size="small"
                             color={getStatusColor(project.status)}
-                            variant="outlined"
                           />
                         </TableCell>
                         
                         <TableCell align="center">
-                          {canManage && (
-                            <>
-<Tooltip title="Editar">
-  <IconButton
-    size="small"
-    sx={{ 
-      color: colors.sapphire,
-      mr: 1,
-      '&:hover': { backgroundColor: alpha(colors.sapphire, 0.1) }
-    }}
-    onClick={() => handleOpenDialog(project)} //  AGREGAR ESTA LÍNEA
-  >
-    <EditIcon fontSize="small" />
-  </IconButton>
-</Tooltip>
-                              <Tooltip title="Eliminar">
-                                <IconButton
-                                  size="small"
-                                  color="error"
-                                  sx={{ 
-                                    '&:hover': { backgroundColor: alpha('#f44336', 0.1)  }
-                                  }}
-                                  onClick={() => handleDeleteProject(project)}
-                                >
-                                  <DeleteIcon fontSize="small" />
-                                </IconButton>
-                              </Tooltip>
-                            </>
-                          )}
-                          {!canManage && (
-                            <Typography variant="caption" color="text.secondary">
-                              Solo vista
-                            </Typography>
-                          )}
+                          <Box sx={{ display: 'flex', justifyContent: 'center', gap: 1 }}>
+                            <Tooltip title="Ver detalles">
+                              <IconButton
+                                size="small"
+                                sx={{ 
+                                  color: colors.secondary,
+                                }}
+                                onClick={() => handleViewProject(project)}
+                              >
+                                <ViewIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+
+                            {isAdmin && (
+                              <>
+                                <Tooltip title="Eliminar">
+                                  <IconButton
+                                    size="small"
+                                    color="error"
+                                    onClick={() => handleDeleteProject(project)}
+                                  >
+                                    <DeleteIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                              </>
+                            )}
+                          </Box>
                         </TableCell>
                       </TableRow>
                     );
@@ -836,252 +956,123 @@ const canManageProject = (project) => {
             rowsPerPage={rowsPerPage}
             onRowsPerPageChange={handleChangeRowsPerPage}
             labelRowsPerPage="Filas por página"
-            labelDisplayedRows={({ from, to, count }) =>
-              `${from}-${to} de ${count}`
-            }
+            rowsPerPageOptions={[5, 10, 25]}
           />
         </Paper>
       )}
 
-      {/*  BOTÓN CON NUEVA PALETA */}
-      <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={() => handleOpenDialog()}
-          sx={{ 
-            background: `linear-gradient(135deg, ${colors.borgundy} 0%, ${colors.sapphire} 100%)`,
-            '&:hover': { 
-              background: `linear-gradient(135deg, ${colors.sapphire} 0%, ${colors.borgundy} 100%)`,
-              transform: 'translateY(-2px)',
-              boxShadow: `0 8px 25px ${colors.borgundy}40`,
-            },
-            borderRadius: 2,
-            fontWeight: 'bold',
-          }}
-        >
-          Nuevo Proyecto
-        </Button>
-      </Box>
-
-      {/*  DIÁLOGO CON EFECTO GLASS */}
+      {/* Diálogo para ver detalles */}
       <Dialog 
-        open={openDialog} 
-        onClose={handleCloseDialog} 
-        maxWidth="md" 
+        open={openViewDialog} 
+        onClose={handleCloseViewDialog}
+        maxWidth="sm"
         fullWidth
-        PaperProps={{
-          sx: {
-            borderRadius: 3,
-            background: theme.palette.mode === 'dark'
-              ? `linear-gradient(135deg, ${alpha(colors.sapphire, 0.15)} 0%, ${alpha(colors.borgundy, 0.1)} 100%)`
-              : `linear-gradient(135deg, ${colors.swanWhite} 0%, ${colors.shellstone}20 100%)`,
-            backdropFilter: 'blur(20px)',
-            border: `1px solid ${alpha(theme.palette.divider, 0.2)}`,
-          }
-        }}
       >
-        <DialogTitle sx={{ color: colors.borgundy, fontWeight: 600 }}>
-          {editingProject ? 'Editar Proyecto' : 'Nuevo Proyecto'}
+        <DialogTitle sx={{ color: colors.primary, fontWeight: 600 }}>
+          Detalles del Proyecto
         </DialogTitle>
         <DialogContent>
-          <Box sx={{ mt: 2 }}>
-            <Grid container spacing={2}>              
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  label="Número de Proyecto"
-                  fullWidth
-                  value={form.projectNumber}
-                  onChange={(e) => setForm({ ...form, projectNumber: e.target.value.toUpperCase() })}
-                  required
-                  margin="normal"
-                  error={!!errors.projectNumber}
-                  helperText={errors.projectNumber}
-                  placeholder="Ej: PROY2024A"
-                  inputProps={{ 
-                    pattern: "[a-zA-Z0-9]*",
-                    style: { textTransform: 'uppercase' }
-                  }}
-                />
-              </Grid>
-              
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  label="Centro de Costo"
-                  fullWidth
-                  value={form.costCenter}
-                  onChange={(e) => setForm({ ...form, costCenter: e.target.value })}
-                  required
-                  margin="normal"
-                  error={!!errors.costCenter}
-                  helperText={errors.costCenter}
-                  placeholder="Ej: 123456"
-                  inputProps={{ 
-                    pattern: "[0-9]*",
-                    inputMode: "numeric"
-                  }}
-                />
-              </Grid>
-
-              <Grid item xs={12}>
-                <TextField
-                  label="Descripción"
-                  fullWidth
-                  multiline
-                  rows={2}
-                  value={form.description}
-                  onChange={(e) => setForm({ ...form, description: e.target.value })}
-                  margin="normal"
-                  placeholder="Descripción detallada del proyecto..."
-                />
-              </Grid>
-
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  label="Presupuesto (CUP) *"
-                  type="number"
-                  fullWidth
-                  value={form.budget}
-                  onChange={(e) => setForm({ ...form, budget: e.target.value })}
-                  required
-                  margin="normal"
-                  error={!!errors.budget}
-                  helperText={errors.budget}
-                  InputProps={{
-                    startAdornment: <span style={{ marginRight: 4, color: colors.sapphire }}>$</span>,
-                  }}
-                />
-              </Grid>
-              
-              {/* Selector de usuario (solo para admin/comercial) */}
-              {['admin', 'comercial'].includes(currentUser?.role) && (
+          {viewingProject && (
+            <Box sx={{ mt: 2 }}>
+              <Grid container spacing={2}>
                 <Grid item xs={12} sm={6}>
-                  <FormControl fullWidth margin="normal" error={!!errors.ownerId}>
-                    <InputLabel>Jefe de Proyecto *</InputLabel>
-                    <Select
-                      value={form.ownerId}
-                      onChange={(e) => setForm({ ...form, ownerId: e.target.value })}
-                      label="Jefe de Proyecto *"
-                    >
-                      <MenuItem value="">Seleccionar usuario</MenuItem>
-                      {availableUsers.map(user => (
-                        <MenuItem key={user.id} value={user.id}>
-                          {user.fullName} - {user.area}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                    <FormHelperText>{errors.ownerId}</FormHelperText>
-                  </FormControl>
+                  <Typography variant="subtitle2" color="text.secondary">
+                    Centro de Costo
+                  </Typography>
+                  <Typography variant="body1" fontWeight="bold">
+                    {viewingProject.costCenter || 'N/A'}
+                  </Typography>
                 </Grid>
-              )}
-
-              <Grid item xs={12} sm={6}>
-                <FormControl fullWidth margin="normal" error={!!errors.areaType} size="small">
-                  <InputLabel>Tipo de Área *</InputLabel>
-                  <Select
-                    value={form.areaType}
-                    onChange={(e) => setForm({ ...form, areaType: e.target.value, area: '' })}
-                    label="Tipo de Área *"
-                  >
-                    <MenuItem value="">Seleccionar tipo</MenuItem>
-                    <MenuItem value="facultad">Facultad</MenuItem>
-                    <MenuItem value="direccion">Dirección</MenuItem>
-                    <MenuItem value="area">Área</MenuItem>
-                    <MenuItem value="departamento">Departamento</MenuItem>
-                    <MenuItem value="oficina">Oficina</MenuItem>
-                  </Select>
-                  <FormHelperText>{errors.areaType}</FormHelperText>
-                </FormControl>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="subtitle2" color="text.secondary">
+                    Número de Proyecto
+                  </Typography>
+                  <Typography variant="body1" fontWeight="bold">
+                    {viewingProject.projectNumber || 'N/A'}
+                  </Typography>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="subtitle2" color="text.secondary">
+                    Jefe de Proyecto
+                  </Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
+                    <Avatar 
+                      sx={{ 
+                        width: 28, 
+                        height: 28,
+                        fontSize: '0.9rem',
+                        backgroundColor: 'rgba(78, 1, 1, 0.1)',
+                        color: colors.primary
+                      }}
+                    >
+                      {viewingProject.ownerName?.charAt(0) || '?'}
+                    </Avatar>
+                    <Box>
+                      <Typography variant="body2">
+                        {viewingProject.ownerName || 'Sin asignar'}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {viewingProject.ownerEmail || ''}
+                      </Typography>
+                    </Box>
+                  </Box>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="subtitle2" color="text.secondary">
+                    Estado
+                  </Typography>
+                  <Chip
+                    label={getStatusLabel(viewingProject.status)}
+                    color={getStatusColor(viewingProject.status)}
+                    size="small"
+                    sx={{ mt: 0.5 }}
+                  />
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="subtitle2" color="text.secondary">
+                    Área
+                  </Typography>
+                  <Typography variant="body1">
+                    {viewingProject.area || 'N/A'}
+                  </Typography>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="subtitle2" color="text.secondary">
+                    Tipo de Área
+                  </Typography>
+                  <Typography variant="body1">
+                    {viewingProject.areaType || 'N/A'}
+                  </Typography>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="subtitle2" color="text.secondary">
+                    Presupuesto
+                  </Typography>
+                  <Typography variant="body1" fontWeight="bold" color={colors.primary}>
+                    ${parseFloat(viewingProject.budget || 0).toLocaleString('es-ES')} CUP
+                  </Typography>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="subtitle2" color="text.secondary">
+                    Fecha Final
+                  </Typography>
+                  <Typography variant="body1">
+                    {viewingProject.endDate ? new Date(viewingProject.endDate).toLocaleDateString('es-ES') : 'N/A'}
+                  </Typography>
+                </Grid>
               </Grid>
-              
-              <Grid item xs={12} sm={6}>
-                <FormControl fullWidth margin="normal" error={!!errors.area} size="small">
-                  <InputLabel>Área *</InputLabel>
-                  <Select
-                    value={form.area}
-                    onChange={(e) => setForm({ ...form, area: e.target.value })}
-                    label="Área *"
-                    disabled={!form.areaType}
-                  >
-                    <MenuItem value="">Seleccionar área</MenuItem>
-                    {form.areaType === 'facultad' && ['Artes y Letras', 'Biología', 'Colegio Universitario San Gerónimo de La Habana', 'Comunicación', 'Contabilidad y Finanzas', 'Derecho', 'Economía', 'Facultad de Educación a Distancia', 'Facultad de Español para No Hispanohablantes', 'Farmacia y Alimentos', 'Filosofía e Historia', 'Física', 'Geografía', 'Instituto Superior de Diseño', 'Instituto Superior de Tecnologías y Ciencias Aplicadas', 'Lenguas Extranjeras', 'Matemática y Computación', 'Psicología', 'Química', 'Turismo'].map(a => (
-                      <MenuItem key={a} value={a}>{a}</MenuItem>
-                    ))}
-                    {form.areaType === 'direccion' && ['VRTD', 'DST', 'MC', 'Rectorado'].map(a => (
-                      <MenuItem key={a} value={a}>{a}</MenuItem>
-                    ))}
-                    {form.areaType === 'area' && ['Comunicación', 'Artes y Letras', 'Jurídica', 'Técnica'].map(a => (
-                      <MenuItem key={a} value={a}>{a}</MenuItem>
-                    ))}
-                    {form.areaType === 'departamento' && ['Desarrollo', 'Soporte', 'Infraestructura', 'Gestión'].map(a => (
-                      <MenuItem key={a} value={a}>{a}</MenuItem>
-                    ))}
-                    {form.areaType === 'oficina' && ['Oficina Principal', 'Oficina Regional', 'Oficina Técnica'].map(a => (
-                      <MenuItem key={a} value={a}>{a}</MenuItem>
-                    ))}
-                  </Select>
-                  <FormHelperText>{errors.area}</FormHelperText>
-                </FormControl>
-              </Grid>
-              
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  label="Fecha de Finalización *"
-                  type="date"
-                  fullWidth
-                  value={form.endDate}
-                  onChange={(e) => setForm({ ...form, endDate: e.target.value })}
-                  margin="normal"
-                  InputLabelProps={{ shrink: true }}
-                  error={!!errors.endDate}
-                  helperText={errors.endDate}
-                  inputProps={{
-                    min: new Date().toISOString().split('T')[0]
-                  }}
-                />
-              </Grid>
-              
-              <Grid item xs={12} sm={6}>
-                <FormControl fullWidth margin="normal">
-                  <InputLabel>Estado</InputLabel>
-                  <Select
-                    value={form.status}
-                    onChange={(e) => setForm({ ...form, status: e.target.value })}
-                    label="Estado"
-                  >
-                    <MenuItem value="active">Activo</MenuItem>
-                    <MenuItem value="paused">En pausa</MenuItem>
-                    <MenuItem value="completed">Completado</MenuItem>
-                  </Select>
-                </FormControl>
-              </Grid>
-            </Grid>
-          </Box>
+            </Box>
+          )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCloseDialog}>Cancelar</Button>
-          <Button
-            onClick={handleSaveProject}
-            variant="contained"
-            disabled={loading}
-            sx={{ 
-              background: `linear-gradient(135deg, ${colors.borgundy} 0%, ${colors.sapphire} 100%)`,
-              '&:hover': { 
-                background: `linear-gradient(135deg, ${colors.sapphire} 0%, ${colors.borgundy} 100%)`,
-              },
-              fontWeight: 'bold',
-            }}
-          >
-            {loading && <CircularProgress size={16} color="inherit" sx={{ mr: 1 }} />}
-            {editingProject ? 'Actualizar' : 'Crear'} Proyecto
-          </Button>
+          <Button onClick={handleCloseViewDialog}>Cerrar</Button>
         </DialogActions>
       </Dialog>
 
-      <Divider sx={{ my: 4 }} />
+      <Divider sx={{ my: 3, mt: 10 }} />
 
       <Typography variant="body2" color="text.secondary" align="center">
-        Sistema SiPP • Mostrando {filteredProjects.length} proyectos • Centro de Costo es la llave principal
+        Sistema SiPP • {filteredProjects.length} proyectos • {isAdmin ? 'Modo Administrador' : 'Modo Visualización'}
       </Typography>
     </Box>
   );

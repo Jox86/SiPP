@@ -175,9 +175,14 @@ export default function Sidebar() {
     
     if (userRole === 'admin') {
       return baseItems; // Admin ve todo
+      // Los siguientes roles están excluídos de las interfaces nombradas:
     } else if (userRole === 'comercial') {
       return baseItems.filter(item => //Comercial de Depto. Comercial DST
         item.text !== 'Usuarios' && item.text !== 'Proyectos' && item.text !== 'Reportes' 
+      );
+    } else if (userRole === 'gestor') {
+      return baseItems.filter(item => // Gestor de Proyectos de Depto. Servicios Técnicos DST
+        item.text !== 'Pedidos' && item.text !== 'Usuarios' && item.text !== 'Proyectos' && item.text !== 'Reportes' 
       );
     } else {
       // Usuario normal (jefe de proyecto)
@@ -470,7 +475,8 @@ export default function Sidebar() {
                     fontWeight: 500,
                   }}>
                     {displayUser?.role === 'admin' ? 'Administrador' : 
-                     displayUser?.role === 'comercial' ? 'Comercial' : 'Usuario'}
+                     displayUser?.role === 'comercial' ? 'Comercial' : 
+                     displayUser?.role === 'gestor' ? 'Gestor' : 'Usuario'}
                   </Typography>
                 </Box>
               )}
@@ -527,7 +533,7 @@ export default function Sidebar() {
           },
         }}
       >
-      <MenuItem onClick={handleProfileUser}>
+        <MenuItem onClick={handleProfileUser}>
           <ListItemIcon>
             <Settings fontSize="small" sx={{ color: colors.borgundy }} />
           </ListItemIcon>
