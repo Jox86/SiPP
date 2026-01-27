@@ -38,38 +38,32 @@ Dashboard
 - En Proyectos Más Activos, la columna de presupuesto debe mostrar el valor actualizado desde la interfaz Proyectos
 
 Pedidos:
-- las vistas previas una vez cargadas se deben poder ver offline, asi que una solucion puede ser guardar chache de las vistas previas localmente
-- Imagenes no cargan en catalogo de productos, modificar para que carguen online y sino local, sino se muestra logo-sipp
-- Carrito de Compras: adicionar y sustraer cantidad de pproducto se hace de dos en dos en vez de uno en uno
-- implementar scrapping de sitios webs de empresas (tcp, mypimes, estatales) de productos que vendan
-- LEn la vista de Productos los filtros deben filtrar por empresa, por categorias y por el buscador 
-- Los catalogos deben ordenarse empezando por los ultimos productos agregados
-- Al intentaar añadir productos desde un enlace a web y no se extraen los productos reales, en vez de mostrar varias tarjetas de productos simulados mejor que muestre una sola tarjeta con la vista previa e informacion de la Empresa/Tienda. aunque despues de cargar se quede la app offline debe mostrarse la vista previa 
-- En la vista Historial, ocultar para administrador, comercial y gestor la accion editar pedido
-- Cuando en Mensajes se queda sin procesar(elegir para comprar) un producto/servicio debe marcarse con color TAN un icono en la tabla de historial antes de N° de pedido segun el pedido realizado, si se adquiere todo entonces el icono sera verde. ambos iconos deben ser el icono de completado
-- los pedidos deben poderse editar, eliminar de toda la app por parte del user que lo haya solicitado o el admin, en ambos casos deben notificarse de forma push en la app visualmente a admin/comercial/gestor o al que creó el pedido. una vez que el estado de pedido cambia a proceso el user no puede editar ni eliminar el pedido
-- para que la interfaz Mensajes pueda extraer cierta informacion es necesario que se encuentre esto establecido en el form de pedidos extras: en los pedidos extras de servicios donde se muestran los detalles de pago, debe actualizarse el Total con el valor que agrega el admin/comercial en el formulario de enviar propuesta. la Cantidad se referira a la cantidad dias de capacitaciones que necesita el user. en servicios del formulario de pedidos se agregará en inputs, selectores y/o descripciones sugerencias en el input segun el tipo de servicios solicitados: ej. capacitacion/consultoria (cantidad de personas, cantidad de dias, fecha de inicio, online (necesita wifi, camara, computadora u otro?) o presencial ( proyector)); mantenimiento/instalacion (tipo de equipos, cantidad de equipos); desarrollo de software (tipo: sitio web, apk movil, app escritorio... añade otros). debe poderse elegir el lugar (facultad, direccion, etcetera)
+- las vistas previas una vez cargadas deben poderse ver en la vista de Productos o Servicios en dependencia del fomulario de Empresas para que aunque no se carguen y extraigan los productos , el usuario pueda acceder a la pagina web de la empresa y pueda solicitar en pedidos extras el productos / servicio desplegado
+- el formulario de empresas debe mostrar al cargar vista previa del website dos casillas para señalar si la web es de Productos y/o servicios (se pueden marcar ambas a la vez), las casillas que se marquen determinaran si la empresa con vista previa se mostrará en la vista de Productos y/o servicios.
+- las vistas previas una vez cargadas en cualquier vista de Pedidos no mostrará  las secciones de cantidades de Productos ni Servicios
+- En la vista de Productos los filtros deben filtrar por empresa, por categorias y por el buscador 
+- Al intentaar añadir productos desde un enlace a web y no se extraen los productos reales, no deben mostrar varias tarjetas de productos simulados 
+- cuando el presupuesto llegue a 0 debe notificarse al usuario que no puede realizar más compras
+- si el usuario intenta hacer una compra que está por encima del valor que posee de presupuesto su proyecto debe notificarse un psuh en app  y no permitir la compra
 
 Usuarios:
 - implementar exportar PDF con todos los datos de los proyectos de la tabla
 
 Proyectos:
 - El presupuesto de cada proyecto solo se actualizara cuando se vincule con Submayor.uh.cu y LDAP mas adelante
+- cuando el presupuesto llegue a 0 debe notificarse al usuario que no puede realizar más compras
+- si el usuario intenta hacer una compra que está por encima del valor que posee de presupuesto su proyecto debe notificarse un psuh en app  y no permitir la compra
+- el presupuesto nunca puede llegar a negativo
 
 Mensajes:
-- El buscador debe buscar segun informacion dentro de un mensaje: Empresa, informacion del producto, productos
-- Si hay mensajes de pedidos archivados mostrar en el boton Archivados la cantidad existente
-
-Separar en segun los roles>:
->Rol User:
-- Si los pedidos estan en catalogos: cuando un pedido no sea seleccionado debe mostrarse automaticamente un mensaje de solo lectura informando cual numero de pedido (N° Pedido) y la descricpion (si tiene) de por qué no fue elegido el producto/servicio 
-- Si los pedidos no estan en catalogos: el ususario recibe el mensaje de propuesta donde debe solamanente marcar las casillas de lo que quiere que se compre segun las propuestas y automaticamente se envia y actualiza en el rol admin/Comercial/Gestor. el usuario debera marcar entre denegar o pedir para que el admin/comercial reciba el cambio de estado
->Roles Admin, Comercial:
-- Si los pedidos estan en catalogos: Los pedidos que lleguen desde la interfaz Pedidos deben poder seleccionarse todos o dejar algunos sin elegirse, para que en caso de que la empresa no posea los productos/servicios elegidos puedan reintegrarse el presupuesto a gastar y los productos en stock. en caso de que un producto/servicio no sea elegido debe aparecer un input al lado para agregar una descripcion de por que. 
-- Si los pedidos no estan en catalogos: Debe poderse responder al pedido y enviar al usuario Jefe de Proyecto que realizó el pedido una propuesta de licitación en formato de miniformulario desplegable que muestre los inputs: Empresa, Presupuesto a gastar por cada producto (los productos se llenan automaticamente segun los que puso el usuario en Pedidos extras), la fecha se llena automaticamnente segun la actuual, y el estado. Cuando el admin/comercial recibe el consentimiento o denegacion del usuario segun la propuesta debe notificarse push en la app un cambio de estado (pedir o denegar) para que el admin luego pueda seguir con el flujo de la app y cambiar el estado a completado, pendiente, en proceso o denegado y el user lo reciba
->Rol Gestor:
-- Solo visualiza los mensajes de admin/comercial, no puede gestionarlos, ni enviar mensajes ni agregar descripciones
-
+- en la sesion user, las propuestas enviadas una vez que hayan sido denegadas deben desabilitarse los botones y el pedido no debe estar disponible para proceder sino que debe verse en la vista TODOS y RESPONDIDOS
+- cuando el usuario da una respuesta Aceptar, Denegar o Seleccionar propuesta sobre un pedido, debe mostrarse un icono de proceder y una pequeña nota de que el usuario accedio o denegor o eligio en la sesion admin/comercial/gestor
+- elimina la vista MODIFICADOS, los mensajes modificados estaran en los respondidos si el user debió responder algo 
+- en la vista PEDNIENTES tambien se mostrarán los pedidos con estado pendiente
+- modifica las estructuras de mensajes para que sean semejantes a los correos en el formato de: el correo mas aantiguo se mostrará al final y el mas reciente es el que se mostrará primero si pertenecen a la misma orden de pedidos, por tanto, al desplegar la lista se mostraran todos los correos con el mismo numero de orden de pedido y asi evitará que el usuario en cualquier rol pierda el hilo de la conversacion. ahora la palabra correo se sustituye por mensajes para que se entienda mejor.
+- cambia un poco los estilos de las pestañas de navegacion entre vistas para que sean iguales a las de la interfaz Pedidos
+- cambia los filtros para que se vean dentro de las vistas
+- el boton Archivados debe mostrarse al lado contrario pero al mismo nivel que las pestañas de vistas
 
 Reportes:
 - Mejorar estructuracion de los graficos en todo tamaño de pantallas

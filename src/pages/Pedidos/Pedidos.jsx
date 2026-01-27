@@ -68,7 +68,13 @@ import {
   Edit as EditIcon,
   Assignment as AssignmentIcon,
   ExpandMore as ExpandMoreIcon,
-  Language as LanguageIcon
+  Language as LanguageIcon,
+  Event as EventIcon,
+  People as PeopleIcon,
+  Computer as ComputerIcon,
+  Build as BuildIcon,
+  Code as CodeIcon,
+  LocationOn as LocationOnIcon
 } from '@mui/icons-material';
 import { 
   EQUIPMENT_CONFIG, 
@@ -86,7 +92,184 @@ import { useTheme as useCustomTheme } from '../../context/ThemeContext';
 import { getImageForProduct, DEFAULT_IMAGE } from '../../utils/productImages';
 import ProductImage from '../../components/ProductImage/ProductImage';
 
-// Nueva función para scraping de productos
+// Sistema de caché para imágenes
+const IMAGE_CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 horas
+
+// Función para limpiar cachés viejas
+const clearOldImageCaches = () => {
+  try {
+    const oneDayAgo = Date.now() - IMAGE_CACHE_DURATION;
+    const keysToRemove = [];
+    
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith('image_cache_')) {
+        try {
+          const cacheData = JSON.parse(localStorage.getItem(key));
+          if (cacheData.timestamp < oneDayAgo) {
+            keysToRemove.push(key);
+          }
+        } catch (e) {
+          keysToRemove.push(key);
+        }
+      }
+    }
+    
+    keysToRemove.forEach(key => localStorage.removeItem(key));
+  } catch (error) {
+    console.error('Error limpiando cachés:', error);
+  }
+};
+
+// Función para buscar imagen online
+const searchProductImageOnline = async (productName) => {
+  try {
+    const query = encodeURIComponent(productName + ' tecnología producto');
+    const placeholderUrl = `https://via.placeholder.com/300/022147/FFFFFF?text=${encodeURIComponent(productName.substring(0, 30))}`;
+    
+    // Intentar buscar en Unsplash si hay API key
+    const apiKey = process.env.REACT_APP_UNSPLASH_ACCESS_KEY;
+    if (apiKey) {
+      const searchUrl = `https://api.unsplash.com/search/photos?query=${query}&per_page=1&client_id=${apiKey}`;
+      const response = await fetch(searchUrl);
+      const data = await response.json();
+      
+      if (data.results && data.results.length > 0) {
+        return data.results[0].urls.small;
+      }
+    }
+    
+    return placeholderUrl;
+  } catch (error) {
+    console.warn('Error buscando imagen online:', error);
+    return null;
+  }
+};
+
+// Función mejorada para obtener imágenes con caché
+const getEnhancedImageForProduct = async (productName) => {
+  if (!productName) return DEFAULT_IMAGE;
+
+  const cacheKey = `image_cache_${productName.toLowerCase().trim()}`;
+  
+  // Verificar caché primero
+  try {
+    const cached = localStorage.getItem(cacheKey);
+    if (cached) {
+      const cacheData = JSON.parse(cached);
+      const cacheAge = Date.now() - cacheData.timestamp;
+      
+      if (cacheAge < IMAGE_CACHE_DURATION) {
+        return cacheData.url;
+      }
+    }
+  } catch (error) {
+    localStorage.removeItem(cacheKey);
+  }
+
+  // Buscar online
+  try {
+    const onlineImage = await searchProductImageOnline(productName);
+    if (onlineImage) {
+      const cacheData = {
+        url: onlineImage,
+        timestamp: Date.now(),
+        productName: productName
+      };
+      localStorage.setItem(cacheKey, JSON.stringify(cacheData));
+      return onlineImage;
+    }
+  } catch (error) {
+    console.warn('Falló búsqueda online:', error);
+  }
+  
+  // Buscar en mapeo local
+  const localImage = getImageForProduct(productName);
+  if (localImage && localImage !== DEFAULT_IMAGE) {
+    return localImage;
+  }
+  
+  // Guardar placeholder en caché
+  const cacheData = {
+    url: DEFAULT_IMAGE,
+    timestamp: Date.now(),
+    productName: productName,
+    isDefault: true
+  };
+  localStorage.setItem(cacheKey, JSON.stringify(cacheData));
+  
+  return DEFAULT_IMAGE;
+};
+
+// Componente de imagen con caché
+const EnhancedProductImage = ({ productName, alt, sx, ...props }) => {
+  const [imageUrl, setImageUrl] = useState(DEFAULT_IMAGE);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadImage = async () => {
+      if (!productName) {
+        setImageUrl(DEFAULT_IMAGE);
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const url = await getEnhancedImageForProduct(productName);
+        setImageUrl(url);
+      } catch (error) {
+        console.error('Error cargando imagen:', error);
+        setImageUrl(DEFAULT_IMAGE);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadImage();
+  }, [productName]);
+
+  return (
+    <Box sx={{ 
+      position: 'relative',
+      width: '100%',
+      height: '100%',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      ...sx 
+    }}>
+      {loading && (
+        <CircularProgress 
+          size={20} 
+          sx={{ 
+            position: 'absolute',
+            color: 'inherit'
+          }} 
+        />
+      )}
+      
+      <img
+        src={imageUrl}
+        alt={alt || productName || 'Producto'}
+        style={{
+          width: '100%',
+          height: '100%',
+          objectFit: 'contain',
+          opacity: loading ? 0.5 : 1,
+          transition: 'opacity 0.3s ease',
+        }}
+        loading="lazy"
+        onError={(e) => {
+          console.warn(`Error cargando imagen para: ${productName}`);
+          e.target.src = DEFAULT_IMAGE;
+        }}
+        {...props}
+      />
+    </Box>
+  );
+};
+
+// Función para scraping de productos
 const scrapeWebsiteProducts = async (websiteUrl) => {
   try {
     console.log('Iniciando scraping de:', websiteUrl);
@@ -134,92 +317,6 @@ const scrapeWebsiteProducts = async (websiteUrl) => {
   }
 };
 
-// Función para obtener imagen online mejorada
-const searchProductImageOnline = async (productName) => {
-  try {
-    // Usar servicio de placeholder si no hay API key
-    const query = encodeURIComponent(productName + ' tecnología producto');
-    
-    // Servicio de placeholder para desarrollo
-    const placeholderUrl = `https://via.placeholder.com/300/022147/FFFFFF?text=${encodeURIComponent(productName.substring(0, 30))}`;
-    
-    // Si tienes API key de Unsplash, úsala:
-    const apiKey = process.env.REACT_APP_UNSPLASH_ACCESS_KEY;
-    if (apiKey) {
-      const searchUrl = `https://api.unsplash.com/search/photos?query=${query}&per_page=1&client_id=${apiKey}`;
-      const response = await fetch(searchUrl);
-      const data = await response.json();
-      
-      if (data.results && data.results.length > 0) {
-        return data.results[0].urls.small;
-      }
-    }
-    
-    return placeholderUrl;
-  } catch (error) {
-    console.warn('Error buscando imagen online:', error);
-    return null;
-  }
-};
-
-// Función mejorada para obtener imágenes
-const getEnhancedImageForProduct = async (productName) => {
-  if (!productName) return DEFAULT_IMAGE;
-
-  const name = productName.toLowerCase();
-  
-  // 1. Buscar online
-  try {
-    const onlineImage = await searchProductImageOnline(productName);
-    if (onlineImage) {
-      return onlineImage;
-    }
-  } catch (error) {
-    console.warn('Falló búsqueda online:', error);
-  }
-  
-  // 2. Buscar en mapeo local
-  const localImage = getImageForProduct(productName);
-  if (localImage && localImage !== DEFAULT_IMAGE) {
-    return localImage;
-  }
-  
-  // 3. Logo por defecto
-  return DEFAULT_IMAGE;
-};
-
-// Paleta de colores con modo oscuro mejorado
-const COLORS = {
-  light: {
-    primary: '#4E0101',
-    secondary: '#3C5070',
-    accent: '#d2b48c',
-    background: '#F5F0E9',
-    paper: '#FFFFFF',
-    text: '#1A202C',
-    textSecondary: '#4A5568',
-    border: '#E2E8F0',
-    success: '#38A169',
-    warning: '#D69E2E',
-    error: '#E53E3E',
-    info: '#3182CE',
-  },
-  dark: {
-    primary: '#FF6B6B',
-    secondary: '#4FD1C5',
-    accent: '#A78B6F',
-    background: '#1A202C',
-    paper: '#2D3748',
-    text: '#F7FAFC',
-    textSecondary: '#CBD5E0',
-    border: '#4A5568',
-    success: '#68D391',
-    warning: '#F6E05E',
-    error: '#FC8181',
-    info: '#63B3ED',
-  }
-};
-
 // Componente para vista previa de website
 const WebsitePreview = ({ websiteUrl, companyName }) => {
   const [loading, setLoading] = useState(true);
@@ -264,6 +361,64 @@ const WebsitePreview = ({ websiteUrl, companyName }) => {
       />
     </Box>
   );
+};
+
+// Paleta de colores con modo oscuro mejorado
+const COLORS = {
+  light: {
+    primary: '#4E0101',
+    secondary: '#3C5070',
+    accent: '#d2b48c',
+    background: '#F5F0E9',
+    paper: '#FFFFFF',
+    text: '#1A202C',
+    textSecondary: '#4A5568',
+    border: '#E2E8F0',
+    success: '#38A169',
+    warning: '#D69E2E',
+    error: '#E53E3E',
+    info: '#3182CE',
+    tan: '#d2b48c'
+  },
+  dark: {
+    primary: '#FF6B6B',
+    secondary: '#4FD1C5',
+    accent: '#A78B6F',
+    background: '#1A202C',
+    paper: '#2D3748',
+    text: '#F7FAFC',
+    textSecondary: '#CBD5E0',
+    border: '#4A5568',
+    success: '#68D391',
+    warning: '#F6E05E',
+    error: '#FC8181',
+    info: '#63B3ED',
+    tan: '#A78B6F'
+  }
+};
+
+// Hook useLocalStorage
+const useLocalStorage = (key, initialValue) => {
+  const [storedValue, setStoredValue] = useState(() => {
+    try {
+      const item = localStorage.getItem(key);
+      return item ? JSON.parse(item) : initialValue;
+    } catch (error) {
+      console.error(`Error loading ${key} from localStorage:`, error);
+      return initialValue;
+    }
+  });
+
+  const setValue = (value) => {
+    try {
+      setStoredValue(value);
+      localStorage.setItem(key, JSON.stringify(value));
+    } catch (error) {
+      console.error(`Error saving ${key} to localStorage:`, error);
+    }
+  };
+
+  return [storedValue, setValue];
 };
 
 // Plantillas predefinidas
@@ -314,48 +469,19 @@ const validateHeaders = (fileHeaders, requiredHeaders) => {
   );
 };
 
-// Hook useLocalStorage
-const useLocalStorage = (key, initialValue) => {
-  const [storedValue, setStoredValue] = useState(() => {
-    try {
-      const item = localStorage.getItem(key);
-      return item ? JSON.parse(item) : initialValue;
-    } catch (error) {
-      console.error(`Error loading ${key} from localStorage:`, error);
-      return initialValue;
-    }
-  });
-
-  const setValue = (value) => {
-    try {
-      setStoredValue(value);
-      localStorage.setItem(key, JSON.stringify(value));
-    } catch (error) {
-      console.error(`Error saving ${key} to localStorage:`, error);
-    }
-  };
-
-  return [storedValue, setValue];
-};
-
-// Función para obtener el área del usuario desde su perfil
+// Función para obtener el área del usuario
 const getUserArea = (userId) => {
   try {
     const users = JSON.parse(localStorage.getItem('SiPP_users') || '[]');
     const user = users.find(u => u.id === userId);
-    
-    if (user) {
-      return user.area || 'N/A';
-    } else {
-      return 'N/A';
-    }
+    return user ? user.area || 'N/A' : 'N/A';
   } catch (error) {
     console.error('Error obteniendo área del usuario:', error);
     return 'N/A';
   }
 };
 
-// FUNCIÓN PARA OBTENER NOMBRE DE USUARIO
+// Función para obtener nombre de usuario
 const getUserName = (userId) => {
   try {
     const users = JSON.parse(localStorage.getItem('SiPP_users') || '[]');
@@ -370,14 +496,14 @@ const getUserName = (userId) => {
 // Variable global para el contador de pedidos
 let orderCounter = 1;
 
-// Función para generar número de pedido único por tipo
+// Función para generar número de pedido
 const generateOrderNumber = (orderId, year, type = '') => {
   const paddedId = orderId.toString().padStart(3, '0');
   const typeSuffix = type ? `-${type.charAt(0).toUpperCase()}` : '';
   return `PDD-${paddedId}${typeSuffix}-${year.toString().slice(-2)}`;
 };
 
-// FUNCIÓN PARA CALCULAR PRESUPUESTO RESTANTE - CORREGIDA
+// Función para calcular presupuesto restante
 const getRemainingBudget = (project) => {
   try {
     const purchases = JSON.parse(localStorage.getItem('OASiS_purchases') || '[]');
@@ -400,7 +526,63 @@ const getRemainingBudget = (project) => {
   }
 };
 
-export default function Catalogos() {
+// Opciones para formulario de servicios
+const serviceTypes = [
+  'Capacitación',
+  'Consultoría',
+  'Mantenimiento',
+  'Instalación',
+  'Desarrollo de Software',
+  'Soporte Técnico',
+  'Auditoría',
+  'Diseño'
+];
+
+const modalityOptions = [
+  'Online',
+  'Presencial',
+  'Híbrido'
+];
+
+const equipmentTypeOptions = [
+  'Computadoras',
+  'Servidores',
+  'Redes',
+  'Impresoras',
+  'Equipos de comunicación',
+  'Equipos especializados',
+  'Otro'
+];
+
+const softwareTypeOptions = [
+  'Sitio Web',
+  'Aplicación Móvil',
+  'App de Escritorio',
+  'Sistema de Gestión',
+  'Base de Datos',
+  'API',
+  'Integración de Sistemas',
+  'Otro'
+];
+
+const locationTypeOptions = [
+  'Facultad',
+  'Dirección',
+  'Área',
+  'Departamento',
+  'Oficina',
+  'Otro'
+];
+
+const areaOptionsByType = {
+  facultad: ['Artes y Letras', 'Biología', 'Colegio Universitario San Gerónimo de La Habana', 'Comunicación', 'Contabilidad y Finanzas', 'Derecho', 'Economía', 'Facultad de Educación a Distancia', 'Facultad de Español para No Hispanohablantes', 'Farmacia y Alimentos', 'Filosofía e Historia', 'Física', 'Geografía', 'Instituto Superior de Diseño', 'Instituto Superior de Tecnologías y Ciencias Aplicadas', 'Lenguas Extranjeras', 'Matemática y Computación', 'Psicología', 'Química', 'Turismo'],
+  direccion: ['Vicerrectoría de Transformación Digital VRTD', 'Dirección de Servicios Tecnológicos DST', 'Dirección de Comunicaciones', 'Dirección de Innovación Digital DID', 'Rectorado'],
+  area: ['Comunicación', 'Artes y Letras', 'Jurídica', 'Técnica'],
+  departamento: ['Desarrollo', 'Soporte', 'Infraestructura', 'Gestión'],
+  oficina: ['Oficina Principal', 'Oficina Regional', 'Oficina Técnica']
+};
+
+export default function Pedidos() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const { currentUser } = useAuth();
@@ -408,7 +590,7 @@ export default function Catalogos() {
   const { projects } = useProjects(currentUser?.id);
   
   // Hook para modo oscuro
-  const { darkMode } = useCustomTheme(); // Elimina toggleDarkMode si no se usa
+  const { darkMode } = useCustomTheme();
   const colors = darkMode ? COLORS.dark : COLORS.light;
 
   // Estados para ordenamiento
@@ -440,21 +622,21 @@ export default function Catalogos() {
   const [uploadModal, setUploadModal] = useState(false);
   const [editMode, setEditMode] = useState(false);
   
-  // Estado del formulario actualizado con website
+  // Estado del formulario actualizado
   const [form, setForm] = useState({
     id: null,
     supplier: '',
     company: '',
     businessType: '',
-    website: '', // Nuevo campo para website
+    website: '',
     dataType: 'both',
     companyImage: null,
     currency: 'CUP',
     contractActive: false,
     productsCount: 0,
     servicesCount: 0,
-    scrapingStatus: 'not_started', // Estado del scraping
-    scrapedProducts: [] // Productos obtenidos por scraping
+    scrapingStatus: 'not_started',
+    scrapedProducts: []
   });
   
   const [files, setFiles] = useState({
@@ -469,7 +651,7 @@ export default function Catalogos() {
   const [previewType, setPreviewType] = useState('products');
   const [orderDetailsDialog, setOrderDetailsDialog] = useState(null);
 
-  // Estado para pedidos extras
+  // Estado para pedidos extras - ACTUALIZADO con campos para servicios
   const [specialOrderForm, setSpecialOrderForm] = useState({
     orderType: 'product',
     products: [{ 
@@ -479,9 +661,33 @@ export default function Catalogos() {
       characteristics: {},
       quantity: 1
     }],
+    services: [{ 
+      serviceType: '', 
+      description: '', 
+      scope: '', 
+      requirements: '',
+      quantity: 1,
+      participants: '',
+      days: '',
+      startDate: '',
+      modality: '',
+      locationType: '',
+      location: '',
+      equipmentType: '',
+      equipmentQuantity: '',
+      softwareType: '',
+      areaType: '',
+      area: '',
+      equipment: []
+    }],
     currency: 'CUP',
     projectId: ''
   });
+
+  // Limpiar cachés viejas al iniciar
+  useEffect(() => {
+    clearOldImageCaches();
+  }, []);
 
   // Inicializar el contador de pedidos
   useEffect(() => {
@@ -550,7 +756,8 @@ export default function Catalogos() {
         companyColor: c.color || colors.primary,
         contractActive: c.contractActive || false,
         fromWebsite: p.fromWebsite || false,
-        website: p.website
+        website: p.website,
+        createdAt: c.createdAt || new Date().toISOString()
       })));
     
     // Agregar productos de scraping de las empresas
@@ -565,22 +772,36 @@ export default function Catalogos() {
         companyColor: c.color || colors.primary,
         contractActive: c.contractActive || false,
         fromWebsite: true,
-        website: c.website
+        website: c.website,
+        createdAt: c.updatedAt || new Date().toISOString()
       })));
     
-    return [...catalogProducts, ...scrapedProducts];
+    // Ordenar por fecha de creación (más recientes primero)
+    return [...catalogProducts, ...scrapedProducts].sort((a, b) => {
+      const dateA = new Date(a.createdAt || 0);
+      const dateB = new Date(b.createdAt || 0);
+      return dateB - dateA;
+    });
   }, [catalogs, colors.primary]);
 
   const allServices = useMemo(() => {
-    return catalogs
+    const services = catalogs
       .filter(c => c.dataType === 'services')
       .flatMap(c => c.data.map(s => ({
         ...s,
         id: s.id || Date.now() + Math.random(),
         company: c.company,
         supplier: c.supplier,
-        contractActive: c.contractActive || false
+        contractActive: c.contractActive || false,
+        createdAt: c.createdAt || new Date().toISOString()
       })));
+    
+    // Ordenar por fecha de creación (más recientes primero)
+    return services.sort((a, b) => {
+      const dateA = new Date(a.createdAt || 0);
+      const dateB = new Date(b.createdAt || 0);
+      return dateB - dateA;
+    });
   }, [catalogs]);
 
   const companies = useMemo(() => {
@@ -633,170 +854,16 @@ export default function Catalogos() {
     return inactiveItems.length > 0;
   };
 
-  // Navegación lateral
-  const views = currentUser?.role === 'admin' 
-    ? ['products', 'services', 'special-orders', 'history', 'companies']
-    : ['products', 'services', 'special-orders', 'history'];
-  const currentIndex = views.indexOf(viewMode);
-  const prevView = currentIndex > 0 ? views[currentIndex - 1] : null;
-  const nextView = currentIndex < views.length - 1 ? views[currentIndex + 1] : null;
-
-  const goToPrev = () => {
-    if (prevView) setViewMode(prevView);
-  };
-
-  const goToNext = () => {
-    if (nextView) setViewMode(nextView);
-  };
-
-  // Función para limpiar cachés viejas
-  const clearOldImageCaches = () => {
-    try {
-      const oneDayAgo = Date.now() - (24 * 60 * 60 * 1000);
-      const keysToRemove = [];
-      
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key && key.startsWith('image_cache_')) {
-          try {
-            const cacheData = JSON.parse(localStorage.getItem(key));
-            if (cacheData.timestamp < oneDayAgo) {
-              keysToRemove.push(key);
-            }
-          } catch (e) {
-            keysToRemove.push(key);
-          }
-        }
-      }
-      
-      keysToRemove.forEach(key => localStorage.removeItem(key));
-    } catch (error) {
-      console.error('Error limpiando cachés:', error);
-    }
-  };
-
-  // Componente de imagen con CACHÉ y DEBOUNCE
-  const EnhancedProductImage = ({ productName, alt, sx, ...props }) => {
-    const [imageUrl, setImageUrl] = useState(DEFAULT_IMAGE);
-    const [loading, setLoading] = useState(true);
-    const [cacheKey] = useState(() => `image_cache_${productName?.toLowerCase()?.trim()}`);
-
-    useEffect(() => {
-      if (!productName) {
-        setImageUrl(DEFAULT_IMAGE);
-        setLoading(false);
-        return;
-      }
-
-      const cachedImage = localStorage.getItem(cacheKey);
-      if (cachedImage) {
-        try {
-          const cacheData = JSON.parse(cachedImage);
-          const cacheAge = Date.now() - cacheData.timestamp;
-          const CACHE_DURATION = 24 * 60 * 60 * 1000;
-          
-          if (cacheAge < CACHE_DURATION) {
-            setImageUrl(cacheData.url);
-            setLoading(false);
-            return;
-          }
-        } catch (error) {
-          localStorage.removeItem(cacheKey);
-        }
-      }
-
-      setLoading(true);
-      
-      const debounceTimer = setTimeout(async () => {
-        try {
-          const url = await getEnhancedImageForProduct(productName);
-          
-          const cacheData = {
-            url: url,
-            timestamp: Date.now(),
-            productName: productName
-          };
-          
-          try {
-            localStorage.setItem(cacheKey, JSON.stringify(cacheData));
-          } catch (storageError) {
-            clearOldImageCaches();
-          }
-          
-          setImageUrl(url);
-        } catch (error) {
-          console.error('Error cargando imagen:', error);
-          setImageUrl(DEFAULT_IMAGE);
-          
-          const defaultCacheData = {
-            url: DEFAULT_IMAGE,
-            timestamp: Date.now(),
-            productName: productName,
-            isDefault: true
-          };
-          
-          try {
-            localStorage.setItem(cacheKey, JSON.stringify(defaultCacheData));
-          } catch (e) {
-            // Ignorar errores de almacenamiento
-          }
-        } finally {
-          setLoading(false);
-        }
-      }, 300);
-
-      return () => {
-        clearTimeout(debounceTimer);
-      };
-    }, [productName, cacheKey]);
-
-    return (
-      <Box sx={{ 
-        position: 'relative',
-        width: '100%',
-        height: '100%',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        ...sx 
-      }}>
-        {loading && (
-          <CircularProgress 
-            size={20} 
-            sx={{ 
-              position: 'absolute',
-              color: colors.primary
-            }} 
-          />
-        )}
-        
-        <img
-          src={imageUrl}
-          alt={alt || productName || 'Producto'}
-          style={{
-            width: '100%',
-            height: '100%',
-            objectFit: 'contain',
-            opacity: loading ? 0.5 : 1,
-            transition: 'opacity 0.3s ease',
-          }}
-          loading="lazy"
-          onError={(e) => {
-            console.warn(`Error cargando imagen para: ${productName}`);
-            e.target.src = DEFAULT_IMAGE;
-          }}
-        />
-      </Box>
-    );
-  };
-
   // Añadir al carrito
   const addToCart = (item) => {
-    // Restringir si es comercial o gestor
-    if (currentUser?.role === 'comercial' || currentUser?.role === 'gestor') {
+    // Permitir a admin, comercial y gestor realizar compras
+    // Solo restringir si el rol no tiene permisos
+    const allowedRoles = ['admin', 'user', 'comercial', 'gestor'];
+    
+    if (!allowedRoles.includes(currentUser?.role)) {
       addNotification({
         title: 'Acción no permitida',
-        message: 'Solo los Jefes de Proyectos pueden realizar compras',
+        message: 'No tienes permisos para realizar compras',
         type: 'error'
       });
       return;
@@ -864,7 +931,7 @@ export default function Catalogos() {
     });
   };
 
-  // Cambiar cantidad
+  // Cambiar cantidad - CORREGIDO para cambiar de 1 en 1
   const updateQuantity = (id, delta) => {
     setCart(prev => {
       const updated = prev.map(item =>
@@ -1300,220 +1367,220 @@ export default function Catalogos() {
 
   // Función para guardar empresa con scraping
   const handleSubmit = async () => {
-  console.log('🚀 Iniciando guardado de empresa...', { form, editMode });
-  
-  if (!form.supplier || !form.company || !form.businessType) {
-    setErrors({ ...errors, form: 'Todos los campos son obligatorios' });
-    return;
-  }
+    console.log('🚀 Iniciando guardado de empresa...', { form, editMode });
+    
+    if (!form.supplier || !form.company || !form.businessType) {
+      setErrors({ ...errors, form: 'Todos los campos son obligatorios' });
+      return;
+    }
 
-  setLoading(true);
-  try {
-    let updatedCatalogs = [...catalogs];
-    const timestamp = new Date().toISOString();
-    
-    // CORRECCIÓN: Generar ID único para nueva empresa
-    const newCompanyId = editMode ? form.id : Date.now().toString();
-    
-    // CORRECCIÓN: En modo edición, buscar por ID específico
-    // En modo creación, verificar si ya existe empresa con el mismo nombre
-    let existingCompanyCatalogs = [];
-    let oldCompanyName = form.company;
-    
-    if (editMode) {
-      // En modo edición: buscar por ID
-      existingCompanyCatalogs = catalogs.filter(c => {
-        const baseId = c.id ? c.id.replace('-products', '').replace('-services', '') : '';
-        return baseId === form.id;
+    setLoading(true);
+    try {
+      let updatedCatalogs = [...catalogs];
+      const timestamp = new Date().toISOString();
+      
+      // Generar ID único para nueva empresa
+      const newCompanyId = editMode ? form.id : Date.now().toString();
+      
+      // En modo edición, buscar por ID específico
+      // En modo creación, verificar si ya existe empresa con el mismo nombre
+      let existingCompanyCatalogs = [];
+      let oldCompanyName = form.company;
+      
+      if (editMode) {
+        // En modo edición: buscar por ID
+        existingCompanyCatalogs = catalogs.filter(c => {
+          const baseId = c.id ? c.id.replace('-products', '').replace('-services', '') : '';
+          return baseId === form.id;
+        });
+        
+        if (existingCompanyCatalogs.length > 0) {
+          oldCompanyName = existingCompanyCatalogs[0].company;
+        }
+      } else {
+        // En modo creación: verificar si ya existe empresa con el mismo nombre
+        existingCompanyCatalogs = catalogs.filter(c => 
+          c.company.toLowerCase() === form.company.toLowerCase()
+        );
+        
+        // Si ya existe una empresa con el mismo nombre, mostrar error
+        if (existingCompanyCatalogs.length > 0) {
+          throw new Error(`Ya existe una empresa registrada con el nombre "${form.company}". Use otro nombre o edite la empresa existente.`);
+        }
+      }
+      
+      const existingProductCatalog = existingCompanyCatalogs.find(c => c.dataType === 'products');
+      const existingServiceCatalog = existingCompanyCatalogs.find(c => c.dataType === 'services');
+      
+      console.log('🔄 Datos para actualización:', {
+        editMode,
+        existingCompanyCatalogs: existingCompanyCatalogs.length,
+        oldCompanyName,
+        newCompanyName: form.company,
+        newCompanyId
       });
+
+      // Procesar catálogo de productos
+      let productData = [];
+      if (files.products && files.products instanceof File) {
+        productData = await parseExcel(files.products, 'products');
+      } else if (editMode && existingProductCatalog) {
+        productData = existingProductCatalog.data;
+      }
+
+      // Incluir productos de scraping solo si se realizó scraping
+      const finalProductData = files.products ? 
+        [...productData] : // Si hay archivo nuevo, usar solo esos datos
+        [...productData, ...form.scrapedProducts]; // Si no hay archivo, agregar scraping
+
+      if (finalProductData.length > 0 || (editMode && files.products === null && existingProductCatalog)) {
+        const productCatalog = {
+          id: `${newCompanyId}-products`,
+          supplier: form.supplier,
+          company: form.company,
+          businessType: form.businessType,
+          website: form.website,
+          dataType: 'products',
+          data: finalProductData,
+          scrapedProducts: form.scrapedProducts,
+          companyImage: form.companyImage,
+          currency: form.currency,
+          contractActive: form.contractActive,
+          createdAt: editMode ? (existingProductCatalog?.createdAt || timestamp) : timestamp,
+          updatedAt: timestamp,
+        };
+
+        // En modo creación, solo agregar, no eliminar
+        if (editMode) {
+          // En modo edición: eliminar catálogo existente y agregar nuevo
+          updatedCatalogs = updatedCatalogs.filter(c => 
+            !(c.id === `${newCompanyId}-products`)
+          );
+        }
+        updatedCatalogs.push(productCatalog);
+      }
+
+      // Procesar catálogo de servicios
+      let serviceData = [];
+      if (files.services && files.services instanceof File) {
+        serviceData = await parseExcel(files.services, 'services');
+      } else if (editMode && existingServiceCatalog) {
+        serviceData = existingServiceCatalog.data;
+      }
+
+      if (serviceData.length > 0 || (editMode && files.services === null && existingServiceCatalog)) {
+        const serviceCatalog = {
+          id: `${newCompanyId}-services`,
+          supplier: form.supplier,
+          company: form.company,
+          businessType: form.businessType,
+          website: form.website,
+          dataType: 'services',
+          data: serviceData,
+          companyImage: form.companyImage,
+          currency: form.currency,
+          contractActive: form.contractActive,
+          createdAt: editMode ? (existingServiceCatalog?.createdAt || timestamp) : timestamp,
+          updatedAt: timestamp,
+        };
+
+        // En modo creación, solo agregar, no eliminar
+        if (editMode) {
+          // En modo edición: eliminar catálogo existente y agregar nuevo
+          updatedCatalogs = updatedCatalogs.filter(c => 
+            !(c.id === `${newCompanyId}-services`)
+          );
+        }
+        updatedCatalogs.push(serviceCatalog);
+      }
+
+      // Solo actualizar referencias si estamos editando y el nombre cambió
+      let updatedPurchases = [...purchases];
+      let updatedSpecialOrders = [...specialOrders];
       
-      if (existingCompanyCatalogs.length > 0) {
-        oldCompanyName = existingCompanyCatalogs[0].company;
-      }
-    } else {
-      // En modo creación: verificar si ya existe empresa con el mismo nombre
-      existingCompanyCatalogs = catalogs.filter(c => 
-        c.company.toLowerCase() === form.company.toLowerCase()
-      );
-      
-      // Si ya existe una empresa con el mismo nombre, mostrar error
-      if (existingCompanyCatalogs.length > 0) {
-        throw new Error(`Ya existe una empresa registrada con el nombre "${form.company}". Use otro nombre o edite la empresa existente.`);
-      }
-    }
-    
-    const existingProductCatalog = existingCompanyCatalogs.find(c => c.dataType === 'products');
-    const existingServiceCatalog = existingCompanyCatalogs.find(c => c.dataType === 'services');
-    
-    console.log('🔄 Datos para actualización:', {
-      editMode,
-      existingCompanyCatalogs: existingCompanyCatalogs.length,
-      oldCompanyName,
-      newCompanyName: form.company,
-      newCompanyId
-    });
+      if (editMode && oldCompanyName !== form.company) {
+        console.log('🔄 Actualizando referencias por cambio de nombre de empresa');
+        
+        const updateOrderReferences = (orders) => {
+          return orders.map(order => ({
+            ...order,
+            items: order.items?.map(item => ({
+              ...item,
+              company: item.company === oldCompanyName ? form.company : item.company,
+              supplier: item.supplier === oldCompanyName ? form.supplier : item.supplier
+            })) || [],
+            ...(order.company === oldCompanyName && {
+              company: form.company,
+              supplier: form.supplier
+            })
+          }));
+        };
 
-    // Procesar catálogo de productos
-    let productData = [];
-    if (files.products && files.products instanceof File) {
-      productData = await parseExcel(files.products, 'products');
-    } else if (editMode && existingProductCatalog) {
-      productData = existingProductCatalog.data;
-    }
-
-    // Incluir productos de scraping solo si se realizó scraping
-    const finalProductData = files.products ? 
-      [...productData] : // Si hay archivo nuevo, usar solo esos datos
-      [...productData, ...form.scrapedProducts]; // Si no hay archivo, agregar scraping
-
-    if (finalProductData.length > 0 || (editMode && files.products === null && existingProductCatalog)) {
-      const productCatalog = {
-        id: `${newCompanyId}-products`,
-        supplier: form.supplier,
-        company: form.company,
-        businessType: form.businessType,
-        website: form.website,
-        dataType: 'products',
-        data: finalProductData,
-        scrapedProducts: form.scrapedProducts,
-        companyImage: form.companyImage,
-        currency: form.currency,
-        contractActive: form.contractActive,
-        createdAt: editMode ? (existingProductCatalog?.createdAt || timestamp) : timestamp,
-        updatedAt: timestamp,
-      };
-
-      // CORRECCIÓN: En modo creación, solo agregar, no eliminar
-      if (editMode) {
-        // En modo edición: eliminar catálogo existente y agregar nuevo
-        updatedCatalogs = updatedCatalogs.filter(c => 
-          !(c.id === `${newCompanyId}-products`)
-        );
-      }
-      updatedCatalogs.push(productCatalog);
-    }
-
-    // Procesar catálogo de servicios
-    let serviceData = [];
-    if (files.services && files.services instanceof File) {
-      serviceData = await parseExcel(files.services, 'services');
-    } else if (editMode && existingServiceCatalog) {
-      serviceData = existingServiceCatalog.data;
-    }
-
-    if (serviceData.length > 0 || (editMode && files.services === null && existingServiceCatalog)) {
-      const serviceCatalog = {
-        id: `${newCompanyId}-services`,
-        supplier: form.supplier,
-        company: form.company,
-        businessType: form.businessType,
-        website: form.website,
-        dataType: 'services',
-        data: serviceData,
-        companyImage: form.companyImage,
-        currency: form.currency,
-        contractActive: form.contractActive,
-        createdAt: editMode ? (existingServiceCatalog?.createdAt || timestamp) : timestamp,
-        updatedAt: timestamp,
-      };
-
-      // CORRECCIÓN: En modo creación, solo agregar, no eliminar
-      if (editMode) {
-        // En modo edición: eliminar catálogo existente y agregar nuevo
-        updatedCatalogs = updatedCatalogs.filter(c => 
-          !(c.id === `${newCompanyId}-services`)
-        );
-      }
-      updatedCatalogs.push(serviceCatalog);
-    }
-
-    // CORRECCIÓN: Solo actualizar referencias si estamos editando y el nombre cambió
-    let updatedPurchases = [...purchases];
-    let updatedSpecialOrders = [...specialOrders];
-    
-    if (editMode && oldCompanyName !== form.company) {
-      console.log('🔄 Actualizando referencias por cambio de nombre de empresa');
-      
-      const updateOrderReferences = (orders) => {
-        return orders.map(order => ({
-          ...order,
-          items: order.items?.map(item => ({
-            ...item,
-            company: item.company === oldCompanyName ? form.company : item.company,
-            supplier: item.supplier === oldCompanyName ? form.supplier : item.supplier
-          })) || [],
-          ...(order.company === oldCompanyName && {
-            company: form.company,
-            supplier: form.supplier
-          })
+        updatedPurchases = updateOrderReferences(purchases);
+        updatedSpecialOrders = updateOrderReferences(specialOrders);
+        
+        // Actualizar carrito si hay cambios
+        const updatedCart = cart.map(item => ({
+          ...item,
+          company: item.company === oldCompanyName ? form.company : item.company,
+          supplier: item.supplier === oldCompanyName ? form.supplier : item.supplier
         }));
-      };
-
-      updatedPurchases = updateOrderReferences(purchases);
-      updatedSpecialOrders = updateOrderReferences(specialOrders);
-      
-      // Actualizar carrito si hay cambios
-      const updatedCart = cart.map(item => ({
-        ...item,
-        company: item.company === oldCompanyName ? form.company : item.company,
-        supplier: item.supplier === oldCompanyName ? form.supplier : item.supplier
-      }));
-      
-      if (JSON.stringify(cart) !== JSON.stringify(updatedCart)) {
-        saveCart(updatedCart);
+        
+        if (JSON.stringify(cart) !== JSON.stringify(updatedCart)) {
+          saveCart(updatedCart);
+        }
       }
+
+      // Guardar cambios
+      setPurchases(updatedPurchases);
+      setSpecialOrders(updatedSpecialOrders);
+      setCatalogs(updatedCatalogs);
+
+      localStorage.setItem('OASiS_purchases', JSON.stringify(updatedPurchases));
+      localStorage.setItem('OASiS_special_orders', JSON.stringify(updatedSpecialOrders));      
+      localStorage.setItem('OASiS_catalogs', JSON.stringify(updatedCatalogs));
+      
+      // Resetear formulario correctamente
+      setForm({ 
+        id: null,
+        supplier: '', 
+        company: '', 
+        businessType: '', 
+        website: '',
+        dataType: 'both',
+        companyImage: null,
+        currency: 'CUP',
+        contractActive: false,
+        productsCount: 0,
+        servicesCount: 0,
+        scrapingStatus: 'not_started',
+        scrapedProducts: []
+      });
+      setFiles({ products: null, services: null });
+      setUploadModal(false);
+      setOpenPreview(false);
+      setEditMode(false);
+      setErrors({});
+      
+      console.log('✅ Empresa guardada exitosamente');
+      
+      addNotification({
+        title: editMode ? 'Empresa actualizada' : 'Nueva empresa creada',
+        message: `Se ${editMode ? 'actualizó' : 'creó'} la empresa "${form.company}" exitosamente`,
+        type: 'success'
+      });
+    } catch (err) {
+      console.error('❌ Error al guardar:', err);
+      setErrors({ ...errors, form: err.message });
+      addNotification({
+        title: 'Error',
+        message: `No se pudo ${editMode ? 'actualizar' : 'crear'} la empresa: ${err.message}`,
+        type: 'error'
+      });
+    } finally {
+      setLoading(false);
     }
-
-    // Guardar cambios
-    setPurchases(updatedPurchases);
-    setSpecialOrders(updatedSpecialOrders);
-    setCatalogs(updatedCatalogs);
-
-    localStorage.setItem('OASiS_purchases', JSON.stringify(updatedPurchases));
-    localStorage.setItem('OASiS_special_orders', JSON.stringify(updatedSpecialOrders));      
-    localStorage.setItem('OASiS_catalogs', JSON.stringify(updatedCatalogs));
-    
-    // Resetear formulario correctamente
-    setForm({ 
-      id: null,
-      supplier: '', 
-      company: '', 
-      businessType: '', 
-      website: '',
-      dataType: 'both',
-      companyImage: null,
-      currency: 'CUP',
-      contractActive: false,
-      productsCount: 0,
-      servicesCount: 0,
-      scrapingStatus: 'not_started',
-      scrapedProducts: []
-    });
-    setFiles({ products: null, services: null });
-    setUploadModal(false);
-    setOpenPreview(false);
-    setEditMode(false);
-    setErrors({});
-    
-    console.log('✅ Empresa guardada exitosamente');
-    
-    addNotification({
-      title: editMode ? 'Empresa actualizada' : 'Nueva empresa creada',
-      message: `Se ${editMode ? 'actualizó' : 'creó'} la empresa "${form.company}" exitosamente`,
-      type: 'success'
-    });
-  } catch (err) {
-    console.error('❌ Error al guardar:', err);
-    setErrors({ ...errors, form: err.message });
-    addNotification({
-      title: 'Error',
-      message: `No se pudo ${editMode ? 'actualizar' : 'crear'} la empresa: ${err.message}`,
-      type: 'error'
-    });
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   // Abrir diálogo de producto
   const openProductDialog = (product) => {
@@ -1521,41 +1588,40 @@ export default function Catalogos() {
   };
 
   // Función para editar catálogo
-  // Función para editar catálogo - CORREGIDA
-const handleEditCatalog = (companyData) => {
-  console.log('🔄 Iniciando edición de empresa:', companyData);
-  
-  const companyCatalogs = catalogs.filter(c => c.company === companyData.company);
-  const productCatalog = companyCatalogs.find(c => c.dataType === 'products');
-  const serviceCatalog = companyCatalogs.find(c => c.dataType === 'services');
-  const baseCatalog = productCatalog || serviceCatalog || companyCatalogs[0] || {};
-  
-  // CORRECCIÓN: Extraer el ID base correctamente
-  const baseId = baseCatalog.id ? 
-    baseCatalog.id.replace('-products', '').replace('-services', '') : 
-    Date.now().toString();
-  
-  setForm({
-    id: baseId, // Usar el ID existente
-    supplier: baseCatalog.supplier || '',
-    company: baseCatalog.company || '',
-    businessType: baseCatalog.businessType || '',
-    website: baseCatalog.website || '',
-    dataType: 'both',
-    companyImage: baseCatalog.companyImage || null,
-    currency: baseCatalog.currency || 'CUP',
-    contractActive: baseCatalog.contractActive || false,
-    productsCount: productCatalog ? productCatalog.data.length : 0,
-    servicesCount: serviceCatalog ? serviceCatalog.data.length : 0,
-    scrapingStatus: baseCatalog.scrapingStatus || 'not_started',
-    scrapedProducts: baseCatalog.scrapedProducts || []
-  });
-  
-  setFiles({ products: null, services: null });
-  setEditMode(true);
-  setUploadModal(true);
-  setErrors({});
-};
+  const handleEditCatalog = (companyData) => {
+    console.log('🔄 Iniciando edición de empresa:', companyData);
+    
+    const companyCatalogs = catalogs.filter(c => c.company === companyData.company);
+    const productCatalog = companyCatalogs.find(c => c.dataType === 'products');
+    const serviceCatalog = companyCatalogs.find(c => c.dataType === 'services');
+    const baseCatalog = productCatalog || serviceCatalog || companyCatalogs[0] || {};
+    
+    // Extraer el ID base correctamente
+    const baseId = baseCatalog.id ? 
+      baseCatalog.id.replace('-products', '').replace('-services', '') : 
+      Date.now().toString();
+    
+    setForm({
+      id: baseId, // Usar el ID existente
+      supplier: baseCatalog.supplier || '',
+      company: baseCatalog.company || '',
+      businessType: baseCatalog.businessType || '',
+      website: baseCatalog.website || '',
+      dataType: 'both',
+      companyImage: baseCatalog.companyImage || null,
+      currency: baseCatalog.currency || 'CUP',
+      contractActive: baseCatalog.contractActive || false,
+      productsCount: productCatalog ? productCatalog.data.length : 0,
+      servicesCount: serviceCatalog ? serviceCatalog.data.length : 0,
+      scrapingStatus: baseCatalog.scrapingStatus || 'not_started',
+      scrapedProducts: baseCatalog.scrapedProducts || []
+    });
+    
+    setFiles({ products: null, services: null });
+    setEditMode(true);
+    setUploadModal(true);
+    setErrors({});
+  };
 
   const handleDeleteCatalog = (id) => {
     if (window.confirm('¿Está seguro de eliminar este catálogo?')) {
@@ -1570,30 +1636,30 @@ const handleEditCatalog = (companyData) => {
     }
   };
 
-  // Función para eliminar empresa - MEJORADA
-const handleDeleteCompany = (companyName) => {
-  if (window.confirm(`¿Está seguro de eliminar la empresa "${companyName}" y todos sus catálogos?`)) {
-    try {
-      // Eliminar solo los catálogos de esta empresa específica
-      const updated = catalogs.filter(c => c.company !== companyName);
-      setCatalogs(updated);
-      localStorage.setItem('OASiS_catalogs', JSON.stringify(updated));
-      
-      addNotification({
-        title: 'Empresa eliminada',
-        message: `La empresa "${companyName}" ha sido eliminada del sistema`,
-        type: 'warning'
-      });
-    } catch (error) {
-      console.error('Error eliminando empresa:', error);
-      addNotification({
-        title: 'Error',
-        message: 'No se pudo eliminar la empresa',
-        type: 'error'
-      });
+  // Función para eliminar empresa
+  const handleDeleteCompany = (companyName) => {
+    if (window.confirm(`¿Está seguro de eliminar la empresa "${companyName}" y todos sus catálogos?`)) {
+      try {
+        // Eliminar solo los catálogos de esta empresa específica
+        const updated = catalogs.filter(c => c.company !== companyName);
+        setCatalogs(updated);
+        localStorage.setItem('OASiS_catalogs', JSON.stringify(updated));
+        
+        addNotification({
+          title: 'Empresa eliminada',
+          message: `La empresa "${companyName}" ha sido eliminada del sistema`,
+          type: 'warning'
+        });
+      } catch (error) {
+        console.error('Error eliminando empresa:', error);
+        addNotification({
+          title: 'Error',
+          message: 'No se pudo eliminar la empresa',
+          type: 'error'
+        });
+      }
     }
-  }
-};
+  };
 
   // Generar plantilla
   const generateTemplate = (type) => {
@@ -1633,7 +1699,7 @@ const handleDeleteCompany = (companyName) => {
   
   const remainingBudget = selectedProjectObj ? getRemainingBudget(selectedProjectObj) - cartTotal : 0;
 
-  // Funciones para manejar pedidos extras
+  // Funciones para manejar pedidos extras - ACTUALIZADAS
   const handleAddProductField = () => {
     setSpecialOrderForm({
       ...specialOrderForm,
@@ -1675,7 +1741,19 @@ const handleDeleteCompany = (companyName) => {
         description: '', 
         scope: '', 
         requirements: '',
-        quantity: 1
+        quantity: 1,
+        participants: '',
+        days: '',
+        startDate: '',
+        modality: '',
+        locationType: '',
+        location: '',
+        equipmentType: '',
+        equipmentQuantity: '',
+        softwareType: '',
+        areaType: '',
+        area: '',
+        equipment: []
       }]
     });
   };
@@ -1728,29 +1806,24 @@ const handleDeleteCompany = (companyName) => {
     });
   };
 
-  const handleGenerateDescription = (index) => {
-    const product = specialOrderForm.products[index];
-    if (product.equipmentType && Object.keys(product.characteristics).length > 0) {
-      const baseDescription = generateEquipmentDescription(product.equipmentType, product.characteristics);
-      const quantity = product.quantity || 1;
-      const descriptionWithQuantity = `${baseDescription} | Cantidad: ${quantity}`;
-      
-      const newProducts = [...specialOrderForm.products];
-      newProducts[index].description = descriptionWithQuantity;
-      setSpecialOrderForm({
-        ...specialOrderForm,
-        products: newProducts
-      });
-      
-      addNotification({
-        title: 'Descripción generada',
-        message: 'Se ha generado automáticamente la descripción del equipo incluyendo cantidad',
-        type: 'success'
-      });
+  // Función para manejar equipamiento Online
+  const handleEquipmentChange = (index, equipment, checked) => {
+    const newServices = [...specialOrderForm.services];
+    const equipmentArray = newServices[index].equipment || [];
+    
+    if (checked) {
+      newServices[index].equipment = [...equipmentArray, equipment];
+    } else {
+      newServices[index].equipment = equipmentArray.filter(item => item !== equipment);
     }
+    
+    setSpecialOrderForm({
+      ...specialOrderForm,
+      services: newServices
+    });
   };
 
-  // Función para enviar pedidos extras
+  // Función para enviar pedidos extras - ACTUALIZADA
   const handleSpecialOrderSubmit = () => {
     if (!specialOrderForm.projectId) {
       addNotification({
@@ -1828,7 +1901,19 @@ const handleDeleteCompany = (companyName) => {
           scope: service.scope,
           requirements: service.requirements,
           quantity: service.quantity || 1,
-          type: 'service'
+          type: 'service',
+          participants: service.participants,
+          days: service.days,
+          startDate: service.startDate,
+          modality: service.modality,
+          locationType: service.locationType,
+          location: service.location,
+          equipmentType: service.equipmentType,
+          equipmentQuantity: service.equipmentQuantity,
+          softwareType: service.softwareType,
+          areaType: service.areaType,
+          area: service.area,
+          equipment: service.equipment || []
         }));
     }
 
@@ -1854,6 +1939,26 @@ const handleDeleteCompany = (companyName) => {
       area: getUserArea(currentUser.id),
       orderType: specialOrderForm.orderType,
       items: processedItems,
+      serviceDetails: specialOrderForm.orderType === 'service' ? 
+        specialOrderForm.services.reduce((details, service, index) => ({
+          ...details,
+          [`service_${index}`]: {
+            serviceType: service.serviceType,
+            modality: service.modality,
+            participants: service.participants,
+            days: service.days,
+            startDate: service.startDate,
+            locationType: service.locationType,
+            location: service.location,
+            requirements: service.requirements,
+            equipmentType: service.equipmentType,
+            equipmentQuantity: service.equipmentQuantity,
+            softwareType: service.softwareType,
+            areaType: service.areaType,
+            area: service.area,
+            equipment: service.equipment || []
+          }
+        }), {}) : {},
       currency: specialOrderForm.currency,
       date: editingOrderId ? specialOrders.find(so => so.id === editingOrderId)?.date || new Date().toISOString() : new Date().toISOString(),
       status: 'Pendiente',
@@ -1872,6 +1977,7 @@ const handleDeleteCompany = (companyName) => {
       setSpecialOrders(updatedSpecialOrders);
       localStorage.setItem('OASiS_special_orders', JSON.stringify(updatedSpecialOrders));
 
+      // Crear notificación para Mensajes
       const notificationMsg = {
         id: `notif_${Date.now()}`,
         type: 'extra_order',
@@ -1889,6 +1995,7 @@ const handleDeleteCompany = (companyName) => {
         details: JSON.stringify({
           orderType: specialOrderForm.orderType,
           items: processedItems,
+          serviceDetails: specialOrderForm.orderType === 'service' ? newSpecialOrder.serviceDetails : null,
           currency: specialOrderForm.currency
         }, null, 2)
       };
@@ -1896,10 +2003,29 @@ const handleDeleteCompany = (companyName) => {
       const existingMessages = JSON.parse(localStorage.getItem('SiPP_messages') || '[]');
       localStorage.setItem('SiPP_messages', JSON.stringify([...existingMessages, notificationMsg]));
 
+      // Resetear formulario
       setSpecialOrderForm({
         orderType: 'product',
         products: [{ name: '', description: '', equipmentType: '', characteristics: {}, quantity: 1 }],
-        services: [{ serviceType: '', description: '', scope: '', requirements: '', quantity: 1 }],
+        services: [{ 
+          serviceType: '', 
+          description: '', 
+          scope: '', 
+          requirements: '',
+          quantity: 1,
+          participants: '',
+          days: '',
+          startDate: '',
+          modality: '',
+          locationType: '',
+          location: '',
+          equipmentType: '',
+          equipmentQuantity: '',
+          softwareType: '',
+          areaType: '',
+          area: '',
+          equipment: []
+        }],
         currency: 'CUP',
         projectId: ''
       });
@@ -1970,11 +2096,31 @@ const handleDeleteCompany = (companyName) => {
   };
 
   const handleEditOrder = (order) => {
+    // Ocultar edición para comercial y gestor en historial
+    if (viewMode === 'history' && ['comercial', 'gestor'].includes(currentUser?.role)) {
+      addNotification({
+        title: 'Acción no permitida',
+        message: 'No puedes editar pedidos en la vista de historial',
+        type: 'error'
+      });
+      return;
+    }
+
     if (order.userId !== currentUser.id && currentUser.role !== 'admin') {
       addNotification({
         title: 'Acceso denegado',
         message: 'Solo puedes editar tus propios pedidos',
         type: 'error'
+      });
+      return;
+    }
+
+    // Verificar si el pedido está en proceso
+    if (order.status === 'En proceso') {
+      addNotification({
+        title: 'Pedido en proceso',
+        message: 'No se puede editar un pedido que está en proceso',
+        type: 'warning'
       });
       return;
     }
@@ -1997,9 +2143,39 @@ const handleDeleteCompany = (companyName) => {
               description: item.description || '',
               scope: item.scope || '',
               requirements: item.requirements || '',
-              quantity: item.quantity || 1
+              quantity: item.quantity || 1,
+              participants: item.participants || '',
+              days: item.days || '',
+              startDate: item.startDate || '',
+              modality: item.modality || '',
+              locationType: item.locationType || '',
+              location: item.location || '',
+              equipmentType: item.equipmentType || '',
+              equipmentQuantity: item.equipmentQuantity || '',
+              softwareType: item.softwareType || '',
+              areaType: item.areaType || '',
+              area: item.area || '',
+              equipment: item.equipment || []
             }))
-          : [{ serviceType: '', description: '', scope: '', requirements: '', quantity: 1 }];
+          : [{ 
+              serviceType: '', 
+              description: '', 
+              scope: '', 
+              requirements: '',
+              quantity: 1,
+              participants: '',
+              days: '',
+              startDate: '',
+              modality: '',
+              locationType: '',
+              location: '',
+              equipmentType: '',
+              equipmentQuantity: '',
+              softwareType: '',
+              areaType: '',
+              area: '',
+              equipment: []
+            }];
 
         setSpecialOrderForm({
           orderType: order.orderType || 'product',
@@ -2044,10 +2220,93 @@ const handleDeleteCompany = (companyName) => {
     setOrderDetailsDialog(order);
   };
 
+  // Función para visitar tienda online
+  const visitWebsite = (url) => {
+    if (!url) return;
+    const fullUrl = url.startsWith('http') ? url : `https://${url}`;
+    window.open(fullUrl, '_blank', 'noopener,noreferrer');
+  };
+
+  // Componente para tarjeta de empresa cuando no hay productos de scraping
+  const CompanyCard = ({ companyData }) => {
+    return (
+      <Card sx={{ 
+        height: '100%', 
+        display: 'flex', 
+        flexDirection: 'column',
+        borderRadius: 2,
+        boxShadow: 1,
+        backgroundColor: colors.paper,
+        transition: 'all 0.2s ease',
+        border: `1px solid ${colors.border}`,
+        '&:hover': {
+          transform: 'translateY(-2px)',
+          boxShadow: 2,
+          borderColor: colors.primary
+        }
+      }}>
+        <CardContent sx={{ flexGrow: 1, position: 'relative' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+            <Avatar
+              src={companyData.companyImage}
+              sx={{ 
+                width: 60, 
+                height: 60,
+                backgroundColor: colors.primary
+              }}
+            >
+              {companyData.company?.charAt(0)}
+            </Avatar>
+            <Box>
+              <Typography variant="h6" sx={{ color: colors.primary, fontWeight: 'bold' }}>
+                {companyData.company}
+              </Typography>
+              <Typography variant="body2" sx={{ color: colors.textSecondary }}>
+                {companyData.businessType} • {companyData.supplier}
+              </Typography>
+            </Box>
+          </Box>
+          
+          <Typography variant="body2" sx={{ color: colors.text, mb: 2 }}>
+            Esta empresa tiene una tienda online pero no se pudieron extraer los productos automáticamente.
+          </Typography>
+          
+          {companyData.website && (
+            <>
+              <WebsitePreview 
+                websiteUrl={companyData.website}
+                companyName={companyData.company}
+              />
+              
+              <Button
+                variant="contained"
+                fullWidth
+                startIcon={<LanguageIcon />}
+                onClick={() => visitWebsite(companyData.website)}
+                sx={{ 
+                  mt: 2,
+                  backgroundColor: colors.primary,
+                  '&:hover': { backgroundColor: colors.secondary }
+                }}
+              >
+                Visitar Tienda Online
+              </Button>
+            </>
+          )}
+        </CardContent>
+      </Card>
+    );
+  };
+
+  // Filtrar productos con búsqueda mejorada
   const filteredProducts = useMemo(() => {
     return allProducts.filter(p => {
-      const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                            p.model.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesSearch = 
+        p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        p.model.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        p.company.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (p.category && p.category.toLowerCase().includes(searchTerm.toLowerCase()));
+      
       const matchesCompany = selectedCompany === 'all' || p.company === selectedCompany;
       const matchesCategory = selectedCategory === 'all' || p.category === selectedCategory;
       const matchesPrice = () => {
@@ -2072,8 +2331,11 @@ const handleDeleteCompany = (companyName) => {
 
   const filteredServices = useMemo(() => {
     return allServices.filter(s => {
-      const matchesSearch = s.service.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                             s.company.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesSearch = 
+        s.service.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        s.company.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (s.type && s.type.toLowerCase().includes(searchTerm.toLowerCase()));
+      
       const matchesPrice = () => {
         const price = s.price;
         switch (priceRange) {
@@ -2128,7 +2390,7 @@ const handleDeleteCompany = (companyName) => {
       supplier: '', 
       company: '', 
       businessType: '',
-      website: '', // Nuevo campo
+      website: '',
       dataType: 'both',
       companyImage: null,
       currency: 'CUP',
@@ -2138,13 +2400,6 @@ const handleDeleteCompany = (companyName) => {
       scrapingStatus: 'not_started',
       scrapedProducts: []
     });
-  };
-
-  // Función para visitar tienda online
-  const visitWebsite = (url) => {
-    if (!url) return;
-    const fullUrl = url.startsWith('http') ? url : `https://${url}`;
-    window.open(fullUrl, '_blank', 'noopener,noreferrer');
   };
 
   return (
@@ -2277,13 +2532,13 @@ const handleDeleteCompany = (companyName) => {
         }
       }}>
 
-        {/* Vista de Productos */}
+        {/* Vista de Productos - MODIFICADA */}
         {viewMode === 'products' && (
           <Box sx={{ backgroundColor: colors.paper, p: 3, borderRadius: 2 }}>
-            {/* Filtros */}
+            {/* Filtros mejorados */}
             <Box sx={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 2, mb: 3 }}>
               <TextField
-                placeholder="Buscar por nombre o modelo..."
+                placeholder="Buscar por nombre, modelo, empresa o categoría..."
                 variant="outlined"
                 size="small"
                 value={searchTerm}
@@ -2705,7 +2960,7 @@ const handleDeleteCompany = (companyName) => {
           </Box>
         )}
 
-        {/* Vista de Pedidos Extras */}
+        {/* Vista de Pedidos Extras - ACTUALIZADA con formulario completo */}
         {viewMode === 'special-orders' && (
           <Box sx={{ 
             maxWidth: 1000, 
@@ -2736,7 +2991,25 @@ const handleDeleteCompany = (companyName) => {
                     ...specialOrderForm, 
                     orderType: e.target.value,
                     products: e.target.value === 'product' ? [{ name: '', description: '', equipmentType: '', characteristics: {}, quantity: 1 }] : [],
-                    services: e.target.value === 'service' ? [{ serviceType: '', description: '', scope: '', requirements: '', quantity: 1 }] : []
+                    services: e.target.value === 'service' ? [{ 
+                      serviceType: '', 
+                      description: '', 
+                      scope: '', 
+                      requirements: '',
+                      quantity: 1,
+                      participants: '',
+                      days: '',
+                      startDate: '',
+                      modality: '',
+                      locationType: '',
+                      location: '',
+                      equipmentType: '',
+                      equipmentQuantity: '',
+                      softwareType: '',
+                      areaType: '',
+                      area: '',
+                      equipment: []
+                    }] : []
                   })}
                   sx={{
                     backgroundColor: colors.paper,
@@ -2871,23 +3144,6 @@ const handleDeleteCompany = (companyName) => {
                           }
                         }}
                       />
-
-                      <Button
-                        variant="outlined"
-                        onClick={() => handleGenerateDescription(index)}
-                        disabled={!product.equipmentType || Object.keys(product.characteristics).length === 0}
-                        sx={{ 
-                          mb: 2,
-                          borderColor: colors.primary,
-                          color: colors.primary,
-                          '&:hover': {
-                            borderColor: colors.secondary,
-                            backgroundColor: colors.border
-                          }
-                        }}
-                      >
-                        Generar Descripción Automática
-                      </Button>
                     </Box>
                   )}
                   
@@ -2933,7 +3189,7 @@ const handleDeleteCompany = (companyName) => {
                 </Button>
               )}
               
-              {/* Campos para Servicios */}
+              {/* Campos para Servicios - ACTUALIZADO con todos los campos */}
               {specialOrderForm.orderType === 'service' && specialOrderForm.services.map((service, index) => (
                 <Box key={index} sx={{ 
                   mb: 3, 
@@ -2972,14 +3228,350 @@ const handleDeleteCompany = (companyName) => {
                       }}
                     >
                       <MenuItem value="">Seleccionar tipo de servicio</MenuItem>
-                      <MenuItem value="software">Desarrollo de Software</MenuItem>
-                      <MenuItem value="hardware">Instalación de Hardware</MenuItem>
-                      <MenuItem value="consulting">Consultoría TI</MenuItem>
-                      <MenuItem value="maintenance">Mantenimiento</MenuItem>
-                      <MenuItem value="training">Capacitación</MenuItem>
-                      <MenuItem value="other">Otro Servicio</MenuItem>
+                      {serviceTypes.map(type => (
+                        <MenuItem key={type} value={type}>{type}</MenuItem>
+                      ))}
                     </Select>
                   </FormControl>
+
+                  {/* Campos específicos según tipo de servicio */}
+                  {service.serviceType && (
+                    <Box sx={{ mt: 2 }}>
+                      {['Capacitación', 'Consultoría'].includes(service.serviceType) && (
+                        <Grid container spacing={2}>
+                          <Grid item xs={12} sm={6}>
+                            <TextField
+                              label="Cantidad de personas"
+                              fullWidth
+                              type="number"
+                              value={service.participants}
+                              onChange={(e) => handleServiceFieldChange(index, 'participants', e.target.value)}
+                              margin="normal"
+                              size="small"
+                              sx={{
+                                '& .MuiOutlinedInput-root': {
+                                  color: colors.text,
+                                  '& fieldset': {
+                                    borderColor: colors.border,
+                                  },
+                                }
+                              }}
+                            />
+                          </Grid>
+                          <Grid item xs={12} sm={6}>
+                            <TextField
+                              label="Cantidad de días"
+                              fullWidth
+                              type="number"
+                              value={service.days}
+                              onChange={(e) => handleServiceFieldChange(index, 'days', e.target.value)}
+                              margin="normal"
+                              size="small"
+                              sx={{
+                                '& .MuiOutlinedInput-root': {
+                                  color: colors.text,
+                                  '& fieldset': {
+                                    borderColor: colors.border,
+                                  },
+                                }
+                              }}
+                            />
+                          </Grid>
+                          <Grid item xs={12} sm={6}>
+                            <TextField
+                              label="Fecha de inicio"
+                              fullWidth
+                              type="date"
+                              value={service.startDate}
+                              onChange={(e) => handleServiceFieldChange(index, 'startDate', e.target.value)}
+                              margin="normal"
+                              size="small"
+                              InputLabelProps={{ shrink: true }}
+                              sx={{
+                                '& .MuiOutlinedInput-root': {
+                                  color: colors.text,
+                                  '& fieldset': {
+                                    borderColor: colors.border,
+                                  },
+                                }
+                              }}
+                            />
+                          </Grid>
+                          <Grid item xs={12} sm={6}>
+                            <FormControl fullWidth margin="normal" size="small">
+                              <InputLabel>Modalidad</InputLabel>
+                              <Select
+                                value={service.modality}
+                                onChange={(e) => handleServiceFieldChange(index, 'modality', e.target.value)}
+                                label="Modalidad"
+                                sx={{
+                                  color: colors.text,
+                                  backgroundColor: colors.paper,
+                                  '& .MuiOutlinedInput-notchedOutline': {
+                                    borderColor: colors.border,
+                                  }
+                                }}
+                              >
+                                <MenuItem value="">Seleccionar</MenuItem>
+                                {modalityOptions.map(modality => (
+                                  <MenuItem key={modality} value={modality}>{modality}</MenuItem>
+                                ))}
+                              </Select>
+                            </FormControl>
+                          </Grid>
+                          
+                          {/* Mostrar opciones de equipamiento para modalidad Online */}
+                          {service.modality === 'Online' && (
+                            <Grid item xs={12}>
+                              <Box sx={{ mt: 2, p: 2, backgroundColor: colors.paper, borderRadius: 1 }}>
+                                <Typography variant="subtitle2" sx={{ color: colors.text, mb: 2, fontWeight: 'bold' }}>
+                                  Equipamiento para modalidad Online
+                                </Typography>
+                                <Grid container spacing={2}>
+                                  <Grid item xs={12} sm={3}>
+                                    <FormControlLabel
+                                      control={
+                                        <Checkbox
+                                          checked={service.equipment?.includes('plataforma-evea')}
+                                          onChange={(e) => handleEquipmentChange(index, 'plataforma-evea', e.target.checked)}
+                                        />
+                                      }
+                                      label="Plataforma EVEA"
+                                      sx={{ color: colors.text }}
+                                    />
+                                  </Grid>
+                                  <Grid item xs={12} sm={3}>
+                                    <FormControlLabel
+                                      control={
+                                        <Checkbox
+                                          checked={service.equipment?.includes('camara')}
+                                          onChange={(e) => handleEquipmentChange(index, 'camara', e.target.checked)}
+                                        />
+                                      }
+                                      label="Cámara"
+                                      sx={{ color: colors.text }}
+                                    />
+                                  </Grid>
+                                  <Grid item xs={12} sm={3}>
+                                    <FormControlLabel
+                                      control={
+                                        <Checkbox
+                                          checked={service.equipment?.includes('microfono')}
+                                          onChange={(e) => handleEquipmentChange(index, 'microfono', e.target.checked)}
+                                        />
+                                      }
+                                      label="Micrófono"
+                                      sx={{ color: colors.text }}
+                                    />
+                                  </Grid>
+                                  <Grid item xs={12} sm={3}>
+                                    <FormControlLabel
+                                      control={
+                                        <Checkbox
+                                          checked={service.equipment?.includes('salon-virtual')}
+                                          onChange={(e) => handleEquipmentChange(index, 'salon-virtual', e.target.checked)}
+                                        />
+                                      }
+                                      label="Salón virtual"
+                                      sx={{ color: colors.text }}
+                                    />
+                                  </Grid>
+                                </Grid>
+                              </Box>
+                            </Grid>
+                          )}
+                        </Grid>
+                      )}
+                      
+                      {['Mantenimiento', 'Instalación'].includes(service.serviceType) && (
+                        <Grid container spacing={2}>
+                          <Grid item xs={12} sm={6}>
+                            <FormControl fullWidth margin="normal" size="small">
+                              <InputLabel>Tipo de equipo</InputLabel>
+                              <Select
+                                value={service.equipmentType}
+                                onChange={(e) => handleServiceFieldChange(index, 'equipmentType', e.target.value)}
+                                label="Tipo de equipo"
+                                sx={{
+                                  color: colors.text,
+                                  backgroundColor: colors.paper,
+                                  '& .MuiOutlinedInput-notchedOutline': {
+                                    borderColor: colors.border,
+                                  }
+                                }}
+                              >
+                                <MenuItem value="">Seleccionar</MenuItem>
+                                {equipmentTypeOptions.map(equipment => (
+                                  <MenuItem key={equipment} value={equipment}>{equipment}</MenuItem>
+                                ))}
+                              </Select>
+                            </FormControl>
+                          </Grid>
+                          <Grid item xs={12} sm={6}>
+                            <TextField
+                              label="Cantidad de equipos"
+                              fullWidth
+                              type="number"
+                              value={service.equipmentQuantity}
+                              onChange={(e) => handleServiceFieldChange(index, 'equipmentQuantity', e.target.value)}
+                              margin="normal"
+                              size="small"
+                              sx={{
+                                '& .MuiOutlinedInput-root': {
+                                  color: colors.text,
+                                  '& fieldset': {
+                                    borderColor: colors.border,
+                                  },
+                                }
+                              }}
+                            />
+                          </Grid>
+                        </Grid>
+                      )}
+                      
+                      {service.serviceType === 'Desarrollo de Software' && (
+                        <Grid container spacing={2}>
+                          <Grid item xs={12} sm={6}>
+                            <FormControl fullWidth margin="normal" size="small">
+                              <InputLabel>Tipo de software</InputLabel>
+                              <Select
+                                value={service.softwareType}
+                                onChange={(e) => handleServiceFieldChange(index, 'softwareType', e.target.value)}
+                                label="Tipo de software"
+                                sx={{
+                                  color: colors.text,
+                                  backgroundColor: colors.paper,
+                                  '& .MuiOutlinedInput-notchedOutline': {
+                                    borderColor: colors.border,
+                                  }
+                                }}
+                              >
+                                <MenuItem value="">Seleccionar</MenuItem>
+                                {softwareTypeOptions.map(software => (
+                                  <MenuItem key={software} value={software}>{software}</MenuItem>
+                                ))}
+                              </Select>
+                            </FormControl>
+                          </Grid>
+                        </Grid>
+                      )}
+
+                      {/* Selector de lugar */}
+                      <Grid container spacing={2}>
+                        <Grid item xs={12} sm={6}>
+                          <FormControl fullWidth margin="normal" size="small">
+                            <InputLabel>Tipo de lugar</InputLabel>
+                            <Select
+                              value={service.locationType}
+                              onChange={(e) => handleServiceFieldChange(index, 'locationType', e.target.value)}
+                              label="Tipo de lugar"
+                              sx={{
+                                color: colors.text,
+                                backgroundColor: colors.paper,
+                                '& .MuiOutlinedInput-notchedOutline': {
+                                  borderColor: colors.border,
+                                }
+                              }}
+                            >
+                              <MenuItem value="">Seleccionar</MenuItem>
+                              {locationTypeOptions.map(location => (
+                                <MenuItem key={location} value={location}>{location}</MenuItem>
+                              ))}
+                            </Select>
+                          </FormControl>
+                        </Grid>
+                        
+                        {service.locationType && (
+                          <Grid item xs={12} sm={6}>
+                            {service.locationType === 'Facultad' ? (
+                              <FormControl fullWidth margin="normal" size="small">
+                                <InputLabel>Facultad específica</InputLabel>
+                                <Select
+                                  value={service.location}
+                                  onChange={(e) => handleServiceFieldChange(index, 'location', e.target.value)}
+                                  label="Facultad específica"
+                                  sx={{
+                                    color: colors.text,
+                                    backgroundColor: colors.paper,
+                                    '& .MuiOutlinedInput-notchedOutline': {
+                                      borderColor: colors.border,
+                                    }
+                                  }}
+                                >
+                                  <MenuItem value="">Seleccionar</MenuItem>
+                                  {areaOptionsByType.facultad?.map(facultad => (
+                                    <MenuItem key={facultad} value={facultad}>{facultad}</MenuItem>
+                                  ))}
+                                </Select>
+                              </FormControl>
+                            ) : service.locationType === 'Dirección' ? (
+                              <FormControl fullWidth margin="normal" size="small">
+                                <InputLabel>Dirección específica</InputLabel>
+                                <Select
+                                  value={service.location}
+                                  onChange={(e) => handleServiceFieldChange(index, 'location', e.target.value)}
+                                  label="Dirección específica"
+                                  sx={{
+                                    color: colors.text,
+                                    backgroundColor: colors.paper,
+                                    '& .MuiOutlinedInput-notchedOutline': {
+                                      borderColor: colors.border,
+                                    }
+                                  }}
+                                >
+                                  <MenuItem value="">Seleccionar</MenuItem>
+                                  {areaOptionsByType.direccion?.map(direccion => (
+                                    <MenuItem key={direccion} value={direccion}>{direccion}</MenuItem>
+                                  ))}
+                                </Select>
+                              </FormControl>
+                            ) : (
+                              <TextField
+                                label="Lugar específico"
+                                fullWidth
+                                value={service.location}
+                                onChange={(e) => handleServiceFieldChange(index, 'location', e.target.value)}
+                                margin="normal"
+                                size="small"
+                                sx={{
+                                  '& .MuiOutlinedInput-root': {
+                                    color: colors.text,
+                                    '& fieldset': {
+                                      borderColor: colors.border,
+                                    },
+                                  }
+                                }}
+                              />
+                            )}
+                          </Grid>
+                        )}
+                      </Grid>
+
+                      <TextField
+                        label="Requisitos adicionales"
+                        fullWidth
+                        multiline
+                        rows={2}
+                        value={service.requirements}
+                        onChange={(e) => handleServiceFieldChange(index, 'requirements', e.target.value)}
+                        margin="normal"
+                        size="small"
+                        placeholder={
+                          service.modality === 'Online' 
+                            ? 'Ej: Necesita wifi estable, cámara, computadora, micrófono...' 
+                            : 'Ej: Proyector, sala con aire acondicionado, mobiliario...'
+                        }
+                        sx={{
+                          '& .MuiOutlinedInput-root': {
+                            color: colors.text,
+                            '& fieldset': {
+                              borderColor: colors.border,
+                            },
+                          }
+                        }}
+                      />
+                    </Box>
+                  )}
                   
                   <TextField
                     label="Descripción Detallada del Servicio"
@@ -3081,13 +3673,13 @@ const handleDeleteCompany = (companyName) => {
                   '&:hover': { backgroundColor: colors.secondary }
                 }}
               >
-                Solicitar Pedido Extra
+                {editingOrderId ? 'Actualizar Pedido Extra' : 'Solicitar Pedido Extra'}
               </Button>
             </Paper>
           </Box>
         )}
 
-        {/* Vista de Historial */}
+        {/* Vista de Historial - ocultar edición en ciertos roles */}
         {viewMode === 'history' && (
           <Box sx={{ backgroundColor: colors.paper, p: 3, borderRadius: 2 }}>
             <Box sx={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 2, mb: 3 }}>
@@ -3181,6 +3773,9 @@ const handleDeleteCompany = (companyName) => {
                     {filteredPurchases.map((purchase) => {
                       const project = allProjects.find(p => p.id === purchase.projectId);
                       const textColor = colors.text;
+                      const canEdit = !['comercial', 'gestor'].includes(currentUser?.role) && 
+                                     purchase.userId === currentUser?.id && 
+                                     purchase.status !== 'En proceso';
 
                       return (
                         <TableRow 
@@ -3276,37 +3871,42 @@ const handleDeleteCompany = (companyName) => {
                                 </IconButton>
                               </Tooltip>
                               
-                              <Tooltip title="Editar pedido">
-                                <IconButton 
-                                  size="small" 
-                                  onClick={() => handleEditOrder(purchase)}
-                                  sx={{ 
-                                    color: colors.primary,
-                                    '&:hover': {
-                                      backgroundColor: colors.border
-                                    }
-                                  }}
-                                >
-                                  <EditIcon />
-                                </IconButton>
-                              </Tooltip>
-                              <Tooltip title="Eliminar pedido">
-                                <IconButton 
-                                  size="small" 
-                                  onClick={() => handleDeleteOrder(
-                                    purchase.id,
-                                    purchase.type === 'special'
-                                  )}
-                                  sx={{ 
-                                    color: colors.error,
-                                    '&:hover': {
-                                      backgroundColor: colors.border
-                                    }
-                                  }}
-                                >
-                                  <DeleteIcon />
-                                </IconButton>
-                              </Tooltip>
+                              {canEdit && (
+                                <Tooltip title="Editar pedido">
+                                  <IconButton 
+                                    size="small" 
+                                    onClick={() => handleEditOrder(purchase)}
+                                    sx={{ 
+                                      color: colors.primary,
+                                      '&:hover': {
+                                        backgroundColor: colors.border
+                                      }
+                                    }}
+                                  >
+                                    <EditIcon />
+                                  </IconButton>
+                                </Tooltip>
+                              )}
+                              
+                              {(purchase.userId === currentUser?.id || currentUser?.role === 'admin') && (
+                                <Tooltip title="Eliminar pedido">
+                                  <IconButton 
+                                    size="small" 
+                                    onClick={() => handleDeleteOrder(
+                                      purchase.id,
+                                      purchase.type === 'special'
+                                    )}
+                                    sx={{ 
+                                      color: colors.error,
+                                      '&:hover': {
+                                        backgroundColor: colors.border
+                                      }
+                                    }}
+                                  >
+                                    <DeleteIcon />
+                                  </IconButton>
+                                </Tooltip>
+                              )}
                             </Box>
                           </TableCell>
                         </TableRow>
@@ -3319,7 +3919,7 @@ const handleDeleteCompany = (companyName) => {
           </Box>
         )}
 
-        {/* Vista de Empresas vertical (solo admin) - MODIFICADA */}
+        {/* Vista de Empresas vertical (solo admin) - MODIFICADA para mostrar empresas sin productos de scraping */}
         {viewMode === 'companies' && currentUser?.role === 'admin' && (
           <Box sx={{ 
             maxWidth: 1200, 
@@ -3334,10 +3934,9 @@ const handleDeleteCompany = (companyName) => {
                 variant="contained"
                 startIcon={<AddIcon />}
                 onClick={() => {
-                  // CORRECCIÓN: Generar nuevo ID único
                   const newId = Date.now().toString();
                   setForm({ 
-                    id: newId, // Asignar ID único
+                    id: newId,
                     supplier: '', 
                     company: '', 
                     businessType: '', 
@@ -3375,6 +3974,19 @@ const handleDeleteCompany = (companyName) => {
                   const productCatalog = companyCatalogs.find(c => c.dataType === 'products');
                   const serviceCatalog = companyCatalogs.find(c => c.dataType === 'services');
                   const companyData = productCatalog || serviceCatalog || {};
+                  
+                  // Verificar si es una empresa con website pero sin productos de scraping
+                  const hasWebsite = companyData.website && companyData.website.trim() !== '';
+                  const hasScrapedProducts = companyData.scrapedProducts && companyData.scrapedProducts.length > 0;
+                  
+                  // Mostrar tarjeta especial para empresas con website pero sin productos extraídos
+                  if (hasWebsite && !hasScrapedProducts && (!productCatalog || productCatalog.data.length === 0)) {
+                    return (
+                      <Grid item xs={12} sm={6} md={4} key={companyName}>
+                        <CompanyCard companyData={companyData} />
+                      </Grid>
+                    );
+                  }
                   
                   return (
                     <Grid item xs={12} sm={6} md={4} key={companyName}>
@@ -3508,7 +4120,7 @@ const handleDeleteCompany = (companyName) => {
                             variant="outlined"
                             color="error"
                             startIcon={<DeleteIcon />}
-                            onClick={() => handleDeleteCompany(companyName)} // Usar la nueva función
+                            onClick={() => handleDeleteCompany(companyName)}
                             sx={{ flex: 1 }}
                           >
                             Eliminar
@@ -3911,25 +4523,28 @@ const handleDeleteCompany = (companyName) => {
                 >
                   Cerrar
                 </Button>
-                <Button 
-                  variant="contained"
-                  onClick={() => {
-                    handleEditOrder(orderDetailsDialog);
-                    setOrderDetailsDialog(null);
-                  }}
-                  sx={{ 
-                    backgroundColor: colors.primary,
-                    '&:hover': { backgroundColor: colors.secondary }
-                  }}
-                >
-                  Editar Pedido
-                </Button>
+                {(orderDetailsDialog.userId === currentUser?.id || currentUser?.role === 'admin') && 
+                 orderDetailsDialog.status !== 'En proceso' && (
+                  <Button 
+                    variant="contained"
+                    onClick={() => {
+                      handleEditOrder(orderDetailsDialog);
+                      setOrderDetailsDialog(null);
+                    }}
+                    sx={{ 
+                      backgroundColor: colors.primary,
+                      '&:hover': { backgroundColor: colors.secondary }
+                    }}
+                  >
+                    Editar Pedido
+                  </Button>
+                )}
               </DialogActions>
             </>
           )}
         </Dialog>
 
-        {/* Modal de Subida y Edición - FORMULARIO MODERNIZADO */}
+        {/* Modal de Subida y Edición */}
         <Dialog 
           open={uploadModal} 
           onClose={handleCancelEdit} 
@@ -4046,7 +4661,7 @@ const handleDeleteCompany = (companyName) => {
                   </FormControl>
                 </Grid>
 
-                {/* NUEVO CAMPO: Website */}
+                {/* Campo: Website */}
                 <Grid item xs={12} sm={6}>
                   <TextField
                     label="Website de la Tienda Online"
@@ -4402,7 +5017,7 @@ const handleDeleteCompany = (companyName) => {
           </DialogActions>
         </Dialog>
 
-        {/* Carrito */}
+        {/* Carrito - MODIFICADO con corrección de cantidad */}
         <Dialog open={showCart} onClose={() => setShowCart(false)} maxWidth="sm" fullWidth
           PaperProps={{
             sx: {
@@ -4464,7 +5079,7 @@ const handleDeleteCompany = (companyName) => {
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         <IconButton 
                           size="small" 
-                          onClick={() => updateQuantity(item.id, -1)}
+                          onClick={() => updateQuantity(item.id, -1)} // Cambia de 1 en 1
                           disabled={item.quantity <= 1}
                           sx={{ color: colors.primary }}
                         >
@@ -4473,7 +5088,7 @@ const handleDeleteCompany = (companyName) => {
                         <Typography variant="body2" sx={{ color: colors.text }}>{item.quantity}</Typography>
                         <IconButton 
                           size="small" 
-                          onClick={() => updateQuantity(item.id, 1)}
+                          onClick={() => updateQuantity(item.id, 1)} // Cambia de 1 en 1
                           sx={{ color: colors.primary }}
                         >
                           <AddCircleIcon fontSize="small" />
@@ -4565,7 +5180,7 @@ const handleDeleteCompany = (companyName) => {
                     '&:hover': { backgroundColor: colors.secondary },
                   }}
                 >
-                  {loading ? 'Procesando...' : 'Finalizar Compra'}
+                  {loading ? 'Procesando...' : editingOrderId ? 'Actualizar Pedido' : 'Finalizar Compra'}
                 </Button>
               </>
             )}
