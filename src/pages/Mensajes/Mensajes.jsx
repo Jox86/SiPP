@@ -662,10 +662,10 @@ export default function Mensajes() {
         }
         
         ordersByNumber[baseOrderNumber].push({
-          id: order.id + (isSpecial ? '-special' : '-normal'),
+          id: order.id + (isSpecial ? '-special' : '-regular'),
           orderId: order.id,
           orderNumber,
-          type: isSpecial ? 'Pedido Extra' : 'Pedido Normal',
+          type: isSpecial ? 'Pedido Extra' : 'Pedido Regular',
           subType: subType,
           user: getUserName(order.userId),
           userId: order.userId,
@@ -720,7 +720,7 @@ export default function Mensajes() {
             id: order.id + '-products',
             orderId: order.id,
             orderNumber: productOrderNumber,
-            type: 'Pedido Normal',
+            type: 'Pedido Regular',
             subType: 'Productos',
             user: getUserName(order.userId),
             userId: order.userId,
@@ -763,7 +763,7 @@ export default function Mensajes() {
             id: order.id + '-services',
             orderId: order.id,
             orderNumber: serviceOrderNumber,
-            type: 'Pedido Normal',
+            type: 'Pedido Regular',
             subType: 'Servicios',
             user: getUserName(order.userId),
             userId: order.userId,
@@ -811,10 +811,10 @@ export default function Mensajes() {
       }
       
       ordersByNumber[baseOrderNumber].push({
-        id: order.id + (isSpecial ? '-special' : '-normal'),
+        id: order.id + (isSpecial ? '-special' : '-regular'),
         orderId: order.id,
         orderNumber,
-        type: isSpecial ? 'Pedido Extra' : 'Pedido Normal',
+        type: isSpecial ? 'Pedido Extra' : 'Pedido Regular',
         subType: subType,
         user: getUserName(order.userId),
         userId: order.userId,
@@ -829,7 +829,7 @@ export default function Mensajes() {
         items: order.items || [],
         orderType: order.orderType,
         characteristics: order.characteristics,
-        read: isMessageReadForCurrentUser(order.id + (isSpecial ? '-special' : '-normal')),
+        read: isMessageReadForCurrentUser(order.id + (isSpecial ? '-special' : '-regular')),
         timestamp: order.date,
         denialReason: order.denialReason,
         statusUpdatedAt: order.statusUpdatedAt,

@@ -56,14 +56,7 @@ Proyectos:
 - el presupuesto nunca puede llegar a negativo
 
 Mensajes:
-- en la sesion user, las propuestas enviadas una vez que hayan sido denegadas deben desabilitarse los botones y el pedido no debe estar disponible para proceder sino que debe verse en la vista TODOS y RESPONDIDOS
-- cuando el usuario da una respuesta Aceptar, Denegar o Seleccionar propuesta sobre un pedido, debe mostrarse un icono de proceder y una pequeña nota de que el usuario accedio o denegor o eligio en la sesion admin/comercial/gestor
-- elimina la vista MODIFICADOS, los mensajes modificados estaran en los respondidos si el user debió responder algo 
-- en la vista PEDNIENTES tambien se mostrarán los pedidos con estado pendiente
-- modifica las estructuras de mensajes para que sean semejantes a los correos en el formato de: el correo mas aantiguo se mostrará al final y el mas reciente es el que se mostrará primero si pertenecen a la misma orden de pedidos, por tanto, al desplegar la lista se mostraran todos los correos con el mismo numero de orden de pedido y asi evitará que el usuario en cualquier rol pierda el hilo de la conversacion. ahora la palabra correo se sustituye por mensajes para que se entienda mejor.
-- cambia un poco los estilos de las pestañas de navegacion entre vistas para que sean iguales a las de la interfaz Pedidos
-- cambia los filtros para que se vean dentro de las vistas
-- el boton Archivados debe mostrarse al lado contrario pero al mismo nivel que las pestañas de vistas
+
 
 Reportes:
 - Mejorar estructuracion de los graficos en todo tamaño de pantallas
