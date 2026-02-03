@@ -99,81 +99,82 @@ const AuthLayout = () => {
       py: isMobile ? 4 : 6,
       px: isMobile ? 2 : 0
     }}>
-      <Particles
-        id="tsparticles"
-        init={particlesInit}
-        options={{
-          fpsLimit: 60,
-          interactivity: {
-            events: {
-              onHover: { 
-                enable: true, 
-                mode: "repulse",
-                parallax: { enable: false, force: 60, smooth: 10 }
-              },
-              onClick: { enable: true, mode: "push" },
-            },
-            modes: {
-              repulse: { 
-                distance: 100, 
-                duration: 0.4,
-                speed: 1
-              },
-              push: { particles_nb: 4 },
-            },
-          },
-          particles: {
-            color: { value: colors.swanWhite },
-            links: { 
-              color: colors.swanWhite, 
-              distance: 150, 
-              enable: true, 
-              opacity: 0.1, 
-              width: 1 
-            },
-            move: { 
-              direction: "none", 
-              enable: true, 
-              outModes: { default: "out" }, 
-              speed: 0.5,
-              random: true,
-              straight: false,
-            },
-            number: { 
-              density: { 
-                enable: true, 
-                area: 800 
-              }, 
-              value: 60 
-            },
-            opacity: { 
-              value: { min: 0.1, max: 0.2 },
-              animation: {
-                enable: true,
-                speed: 1,
-                minimumValue: 0.1
-              }
-            },
-            shape: { type: "circle" },
-            size: { 
-              value: { min: 1, max: 2 },
-              animation: {
-                enable: true,
-                speed: 3,
-                minimumValue: 0.1
-              }
-            },
-          },
-          detectRetina: true,
-        }}
-        style={{ 
-          position: 'absolute', 
-          width: '100%', 
-          height: '100%', 
-          zIndex: 0 
-        }}
-      />
-
+     <Particles
+  id="tsparticles"
+  init={particlesInit}
+  options={{
+    background: {
+      color: {
+        value: colors.borgundy,
+      },
+    },
+    fpsLimit: 160,
+    interactivity: {
+      events: {
+        onHover: {
+          enable: true,
+          mode: "grab",
+        },
+        onClick: {
+          enable: true,
+          mode: "push",
+        },
+      },
+      modes: {
+        grab: {
+          distance: 80,
+          line_linked: {
+            opacity: 1
+          }
+        },
+        push: {
+          quantity: 4,
+        },
+      },
+    },
+    particles: {
+      color: {
+        value: colors.swanWhite,
+      },
+      links: {
+        color: colors.swanWhite,
+        distance: 120,
+        enable: true,
+        opacity: 0.7,
+        width: 1,
+      },
+      collisions: {
+        enable: true,
+      },
+      move: {
+        direction: "none",
+        enable: true,
+        outMode: "bounce",
+        random: true,
+        speed: 1,
+        straight: false,
+      },
+      number: {
+        density: {
+          enable: true,
+          area: 900,
+        },
+        value: 70,
+      },
+      opacity: {
+        value: 0.8,
+      },
+      shape: {
+        type: "circle",
+      },
+      size: {
+        random: true,
+        value: 4,
+      },
+    },
+    detectRetina: true,
+  }}
+/>
       <Container 
         maxWidth="sm" 
         sx={{ 

@@ -41,7 +41,7 @@ const PDF_CONFIG = {
 // Datos institucionales
 const INSTITUTIONAL_DATA = {
   university: 'UNIVERSIDAD DE LA HABANA',
-  department: 'Departamento de Servicios Tecnológicos (DST)',
+  department: 'Dirección de Servicios Tecnológicos (DST)',
   director: {
     name: 'Dr. Carlos E. Quevedo',
     position: 'Director del Departamento de Servicios Tecnológicos'
@@ -400,7 +400,7 @@ class PDFReportTemplate {
 
   /**
    * Agrega sección de firmas
-   * @param {Array} signatures - Array de firmas [{name, position, department}]
+   * @param {Array} signatures - Array de firmas [{name, position}]
    */
   addSignatures(signatures) {
     this.checkNewPage(60);
@@ -427,9 +427,7 @@ class PDFReportTemplate {
       this.doc.setFont(PDF_CONFIG.fonts.normal);
       this.doc.setFontSize(PDF_CONFIG.fontSizes.small);
       this.doc.text(signature.position, x, signatureTop + 35, { align: 'center' });
-      
-      // Departamento
-      this.doc.text(signature.department, x, signatureTop + 40, { align: 'center' });
+
     });
     
     this.yPosition = signatureTop + 50;
@@ -594,11 +592,11 @@ export const generateSelectedOrdersReport = (data, fileName = null) => {
   const { selectedOrders, stats, tableData } = data;
   
   pdf.addHeader();
-  pdf.addTitle('REPORTE DE PEDIDOS SELECCIONADOS');
+  pdf.addTitle('REPORTE DE PEDIDOS');
   
   pdf.addInfoLine('Fecha de Generación', new Date().toLocaleDateString('es-ES'));
-  pdf.addInfoLine('Pedidos Seleccionados', selectedOrders.toString());
-  pdf.addInfoLine('Monto Total Seleccionado', `$${stats.totalAmount.toFixed(2)} CUP`);
+  pdf.addInfoLine('Pedidos', selectedOrders.toString());
+  pdf.addInfoLine('Monto Total', `$${stats.totalAmount.toFixed(2)} CUP`);
   
   pdf.addSpace(10);
   

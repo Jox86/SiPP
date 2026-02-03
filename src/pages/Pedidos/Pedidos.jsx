@@ -68,8 +68,13 @@ import {
   Edit as EditIcon,
   Assignment as AssignmentIcon,
   ExpandMore as ExpandMoreIcon,
-  DarkMode as DarkModeIcon,
-  LightMode as LightModeIcon
+  Language as LanguageIcon,
+  Event as EventIcon,
+  People as PeopleIcon,
+  Computer as ComputerIcon,
+  Build as BuildIcon,
+  Code as CodeIcon,
+  LocationOn as LocationOnIcon
 } from '@mui/icons-material';
 import { 
   EQUIPMENT_CONFIG, 
@@ -82,89 +87,338 @@ import { saveAs } from 'file-saver';
 import { useAuth } from '../../context/AuthContext';
 import { useNotifications } from '../../context/NotificationContext';
 import { useProjects } from '../../hooks/useProjects';
+import { useTheme as useCustomTheme } from '../../context/ThemeContext';
 
 import { getImageForProduct, DEFAULT_IMAGE } from '../../utils/productImages';
 import ProductImage from '../../components/ProductImage/ProductImage';
 
+// Sistema de caché para imágenes
+const IMAGE_CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 horas
+
+// Función para limpiar cachés viejas
+const clearOldImageCaches = () => {
+  try {
+    const oneDayAgo = Date.now() - IMAGE_CACHE_DURATION;
+    const keysToRemove = [];
+    
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith('image_cache_')) {
+        try {
+          const cacheData = JSON.parse(localStorage.getItem(key));
+          if (cacheData.timestamp < oneDayAgo) {
+            keysToRemove.push(key);
+          }
+        } catch (e) {
+          keysToRemove.push(key);
+        }
+      }
+    }
+    
+    keysToRemove.forEach(key => localStorage.removeItem(key));
+  } catch (error) {
+    console.error('Error limpiando cachés:', error);
+  }
+};
+
 // Función para buscar imagen online
 const searchProductImageOnline = async (productName) => {
   try {
-    // Ejemplo con Unsplash (configura tu API key)
-    const query = encodeURIComponent(productName + ' producto tecnología');
+    const query = encodeURIComponent(productName + ' tecnología producto');
+    const placeholderUrl = `https://via.placeholder.com/300/022147/FFFFFF?text=${encodeURIComponent(productName.substring(0, 30))}`;
+    
+    // Intentar buscar en Unsplash si hay API key
     const apiKey = process.env.REACT_APP_UNSPLASH_ACCESS_KEY;
-    
-    if (!apiKey) {
-      console.warn('No hay API key configurada para búsqueda de imágenes');
-      return null;
+    if (apiKey) {
+      const searchUrl = `https://api.unsplash.com/search/photos?query=${query}&per_page=1&client_id=${apiKey}`;
+      const response = await fetch(searchUrl);
+      const data = await response.json();
+      
+      if (data.results && data.results.length > 0) {
+        return data.results[0].urls.small;
+      }
     }
     
-    const searchUrl = `https://api.unsplash.com/search/photos?query=${query}&per_page=1&client_id=${apiKey}`;
-    
-    const response = await fetch(searchUrl);
-    const data = await response.json();
-    
-    if (data.results && data.results.length > 0) {
-      return data.results[0].urls.small;
-    }
-    
-    return null;
+    return placeholderUrl;
   } catch (error) {
     console.warn('Error buscando imagen online:', error);
     return null;
   }
 };
 
-// Función mejorada para obtener imágenes
+// Función mejorada para obtener imágenes con caché
 const getEnhancedImageForProduct = async (productName) => {
   if (!productName) return DEFAULT_IMAGE;
 
-  const name = productName.toLowerCase();
+  const cacheKey = `image_cache_${productName.toLowerCase().trim()}`;
   
-  // 1. PRIMERO: Buscar online (puedes desactivar esto si no quieres API)
+  // Verificar caché primero
+  try {
+    const cached = localStorage.getItem(cacheKey);
+    if (cached) {
+      const cacheData = JSON.parse(cached);
+      const cacheAge = Date.now() - cacheData.timestamp;
+      
+      if (cacheAge < IMAGE_CACHE_DURATION) {
+        return cacheData.url;
+      }
+    }
+  } catch (error) {
+    localStorage.removeItem(cacheKey);
+  }
+
+  // Buscar online
   try {
     const onlineImage = await searchProductImageOnline(productName);
     if (onlineImage) {
+      const cacheData = {
+        url: onlineImage,
+        timestamp: Date.now(),
+        productName: productName
+      };
+      localStorage.setItem(cacheKey, JSON.stringify(cacheData));
       return onlineImage;
     }
   } catch (error) {
-    console.warn('Falló búsqueda online, usando local:', error);
+    console.warn('Falló búsqueda online:', error);
   }
   
-  // 2. SEGUNDO: Buscar en mapeo local (tu función original)
-  // Copia la función getImageForProduct aquí si no está importada
+  // Buscar en mapeo local
   const localImage = getImageForProduct(productName);
   if (localImage && localImage !== DEFAULT_IMAGE) {
     return localImage;
   }
   
-  // 3. TERCERO: Logo de la app
+  // Guardar placeholder en caché
+  const cacheData = {
+    url: DEFAULT_IMAGE,
+    timestamp: Date.now(),
+    productName: productName,
+    isDefault: true
+  };
+  localStorage.setItem(cacheKey, JSON.stringify(cacheData));
+  
   return DEFAULT_IMAGE;
 };
 
-// Paleta de colores con modo oscuro
+// Componente de imagen con caché
+const EnhancedProductImage = ({ productName, alt, sx, ...props }) => {
+  const [imageUrl, setImageUrl] = useState(DEFAULT_IMAGE);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadImage = async () => {
+      if (!productName) {
+        setImageUrl(DEFAULT_IMAGE);
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const url = await getEnhancedImageForProduct(productName);
+        setImageUrl(url);
+      } catch (error) {
+        console.error('Error cargando imagen:', error);
+        setImageUrl(DEFAULT_IMAGE);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadImage();
+  }, [productName]);
+
+  return (
+    <Box sx={{ 
+      position: 'relative',
+      width: '100%',
+      height: '100%',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      ...sx 
+    }}>
+      {loading && (
+        <CircularProgress 
+          size={20} 
+          sx={{ 
+            position: 'absolute',
+            color: 'inherit'
+          }} 
+        />
+      )}
+      
+      <img
+        src={imageUrl}
+        alt={alt || productName || 'Producto'}
+        style={{
+          width: '100%',
+          height: '100%',
+          objectFit: 'contain',
+          opacity: loading ? 0.5 : 1,
+          transition: 'opacity 0.3s ease',
+        }}
+        loading="lazy"
+        onError={(e) => {
+          console.warn(`Error cargando imagen para: ${productName}`);
+          e.target.src = DEFAULT_IMAGE;
+        }}
+        {...props}
+      />
+    </Box>
+  );
+};
+
+// Función para scraping de productos
+const scrapeWebsiteProducts = async (websiteUrl) => {
+  try {
+    console.log('Iniciando scraping de:', websiteUrl);
+    
+    // Nota: En un entorno real necesitarías un backend para scraping
+    // debido a restricciones CORS. Esto es un ejemplo simulado.
+    
+    // Simulación de scraping (reemplazar con llamada a backend)
+    const mockProducts = [
+      {
+        id: Date.now() + 1,
+        name: 'Producto Web 1',
+        model: 'WEB-001',
+        price: 100,
+        image: DEFAULT_IMAGE,
+        description: 'Producto obtenido desde la website',
+        stock: 10,
+        availability: 'Disponible',
+        category: 'Web',
+        fromWebsite: true,
+        website: websiteUrl
+      },
+      {
+        id: Date.now() + 2,
+        name: 'Producto Web 2',
+        model: 'WEB-002',
+        price: 200,
+        image: DEFAULT_IMAGE,
+        description: 'Otro producto de la tienda online',
+        stock: 5,
+        availability: 'Disponible',
+        category: 'Web',
+        fromWebsite: true,
+        website: websiteUrl
+      }
+    ];
+    
+    // Simular delay de red
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    
+    return mockProducts;
+  } catch (error) {
+    console.error('Error en scraping:', error);
+    throw new Error('No se pudieron obtener productos del sitio web');
+  }
+};
+
+// Componente para vista previa de website
+const WebsitePreview = ({ websiteUrl, companyName }) => {
+  const [loading, setLoading] = useState(true);
+  
+  if (!websiteUrl) return null;
+  
+  return (
+    <Box sx={{ 
+      width: '100%', 
+      height: '200px', 
+      borderRadius: 2,
+      overflow: 'hidden',
+      border: '1px solid',
+      borderColor: 'inherit',
+      position: 'relative'
+    }}>
+      {loading && (
+        <Box sx={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: 'rgba(0,0,0,0.05)'
+        }}>
+          <CircularProgress size={40} />
+        </Box>
+      )}
+      <iframe
+        src={websiteUrl}
+        title={`Tienda online de ${companyName}`}
+        style={{
+          width: '100%',
+          height: '100%',
+          border: 'none'
+        }}
+        onLoad={() => setLoading(false)}
+        sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
+      />
+    </Box>
+  );
+};
+
+// Paleta de colores con modo oscuro mejorado
 const COLORS = {
   light: {
-    borgundy: '#4E0101',
-    tan: '#d2b48c',
-    sapphire: '#3C5070',
-    swanWhite: '#F5F0E9',
-    shellstone: '#D9CBC2',
+    primary: '#4E0101',
+    secondary: '#3C5070',
+    accent: '#d2b48c',
     background: '#F5F0E9',
-    paper: '#F8F9FA',
-    text: '#4E0101',
-    textSecondary: '#3C5070'
+    paper: '#FFFFFF',
+    text: '#1A202C',
+    textSecondary: '#4A5568',
+    border: '#E2E8F0',
+    success: '#38A169',
+    warning: '#D69E2E',
+    error: '#E53E3E',
+    info: '#3182CE',
+    tan: '#d2b48c'
   },
   dark: {
-    borgundy: '#4E0101',
-    tan: '#A78B6F',
-    sapphire: '#4A6388',
-    swanWhite: '#2D3748',
-    shellstone: '#4A5568',
-    background: '#2c1a1aff',
+    primary: '#FF6B6B',
+    secondary: '#4FD1C5',
+    accent: '#A78B6F',
+    background: '#1A202C',
     paper: '#2D3748',
     text: '#F7FAFC',
-    textSecondary: '#E2E8F0'
+    textSecondary: '#CBD5E0',
+    border: '#4A5568',
+    success: '#68D391',
+    warning: '#F6E05E',
+    error: '#FC8181',
+    info: '#63B3ED',
+    tan: '#A78B6F'
   }
+};
+
+// Hook useLocalStorage
+const useLocalStorage = (key, initialValue) => {
+  const [storedValue, setStoredValue] = useState(() => {
+    try {
+      const item = localStorage.getItem(key);
+      return item ? JSON.parse(item) : initialValue;
+    } catch (error) {
+      console.error(`Error loading ${key} from localStorage:`, error);
+      return initialValue;
+    }
+  });
+
+  const setValue = (value) => {
+    try {
+      setStoredValue(value);
+      localStorage.setItem(key, JSON.stringify(value));
+    } catch (error) {
+      console.error(`Error saving ${key} to localStorage:`, error);
+    }
+  };
+
+  return [storedValue, setValue];
 };
 
 // Plantillas predefinidas
@@ -174,14 +428,6 @@ const TEMPLATES = {
     sampleData: [
       ['Teclado Mecánico RGB', 'Redragon Kumara K552', '45', '/assets/images/teclado.jpg', 'Teclado gaming mecánico retroiluminado', '25', 'Disponible', 'Periféricos'],
       ['Mouse Inalámbrico', 'Logitech M720 Triathlon', '35', '/assets/images/mouse.jpg', 'Mouse ergonómico multi-dispositivo', '30', 'Disponible', 'Periféricos'],
-      ['Disco Duro Externo', 'Seagate Expansion 1TB', '60', '/assets/images/discoex.jpg', 'Almacenamiento portátil USB 3.0', '15', 'Disponible', 'Almacenamiento'],
-      ['Memoria USB 64GB', 'SanDisk Ultra Flair', '15', '/assets/images/usb.jpg', 'Memoria USB 3.0 de alta velocidad', '50', 'Disponible', 'Almacenamiento'],
-      ['Hub USB-C', 'UGREEN 4 en 1', '22', '/assets/images/hub.jpg', 'Adaptador multipuerto para laptop', '18', 'Disponible', 'Accesorios'],
-      ['Router WiFi 6', 'TP-Link Archer AX10', '80', '/assets/images/router.jpg', 'Router inalámbrico AX1500', '8', 'Disponible', 'Redes'],
-      ['Adaptador HDMI a VGA', 'UGREEN HDMI2VGA', '18', '/assets/images/AdaptHDMI.jpg', 'Convertidor digital a analógico', '45', 'Disponible', 'Conectividad'],
-      ['Lector de Tarjetas SD', 'Anker USB 3.0', '12', '/assets/images/AllComponents.jpg', 'Lector múltiple para tarjetas de memoria', '60', 'Disponible', 'Accesorios'],
-      ['Switch HDMI', 'Cable Matters 3x1', '35', '/assets/images/switch.jpg', 'Selector de fuentes HDMI automático', '15', 'Disponible', 'Video'],
-      ['Cable Ethernet CAT6', 'Amazon Basics 3m', '8', '/assets/images/AllComponents.jpg', 'Cable de red de alta velocidad', '100', 'Disponible', 'Redes'],
     ]
   },
   services: {
@@ -189,8 +435,6 @@ const TEMPLATES = {
     sampleData: [
       ['Mantenimiento', 'Preventivo', '150', '4 horas', 'Revisión general', 'Precio puede variar'],
       ['Instalación', 'Software', '80', '2 horas', 'Configuración', 'Precio puede variar'],
-      ['Consultoría TI', 'Tecnología', '85.00', '40', 'Carlos Rodríguez', 'Infraestructura', 'Inmediata', '8'],
-      ['Asesoría Legal', 'Legal', '120.00', '20', 'María González', 'Derecho Corporativo', '1 semana', '12']
     ]
   }
 };
@@ -225,48 +469,19 @@ const validateHeaders = (fileHeaders, requiredHeaders) => {
   );
 };
 
-// Hook useLocalStorage
-const useLocalStorage = (key, initialValue) => {
-  const [storedValue, setStoredValue] = useState(() => {
-    try {
-      const item = localStorage.getItem(key);
-      return item ? JSON.parse(item) : initialValue;
-    } catch (error) {
-      console.error(`Error loading ${key} from localStorage:`, error);
-      return initialValue;
-    }
-  });
-
-  const setValue = (value) => {
-    try {
-      setStoredValue(value);
-      localStorage.setItem(key, JSON.stringify(value));
-    } catch (error) {
-      console.error(`Error saving ${key} to localStorage:`, error);
-    }
-  };
-
-  return [storedValue, setValue];
-};
-
-// Función para obtener el área del usuario desde su perfil
+// Función para obtener el área del usuario
 const getUserArea = (userId) => {
   try {
     const users = JSON.parse(localStorage.getItem('SiPP_users') || '[]');
     const user = users.find(u => u.id === userId);
-    
-    if (user) {
-      return user.area || 'N/A';
-    } else {
-      return 'N/A';
-    }
+    return user ? user.area || 'N/A' : 'N/A';
   } catch (error) {
     console.error('Error obteniendo área del usuario:', error);
     return 'N/A';
   }
 };
 
-// FUNCIÓN PARA OBTENER NOMBRE DE USUARIO
+// Función para obtener nombre de usuario
 const getUserName = (userId) => {
   try {
     const users = JSON.parse(localStorage.getItem('SiPP_users') || '[]');
@@ -281,14 +496,14 @@ const getUserName = (userId) => {
 // Variable global para el contador de pedidos
 let orderCounter = 1;
 
-// Función para generar número de pedido único por tipo
+// Función para generar número de pedido
 const generateOrderNumber = (orderId, year, type = '') => {
   const paddedId = orderId.toString().padStart(3, '0');
   const typeSuffix = type ? `-${type.charAt(0).toUpperCase()}` : '';
   return `PDD-${paddedId}${typeSuffix}-${year.toString().slice(-2)}`;
 };
 
-// FUNCIÓN PARA CALCULAR PRESUPUESTO RESTANTE - CORREGIDA
+// Función para calcular presupuesto restante
 const getRemainingBudget = (project) => {
   try {
     const purchases = JSON.parse(localStorage.getItem('OASiS_purchases') || '[]');
@@ -304,13 +519,6 @@ const getRemainingBudget = (project) => {
     
     const remaining = (parseFloat(project.budget) || 0) - totalSpent;
     
-    console.log(`[Pedidos] Proyecto ${project.costCenter}-${project.projectNumber}:`, {
-      budget: project.budget,
-      totalSpent,
-      remaining,
-      ordersCount: projectOrders.length
-    });
-    
     return remaining;
   } catch (error) {
     console.error('[Pedidos] Error calculando presupuesto:', error);
@@ -318,23 +526,79 @@ const getRemainingBudget = (project) => {
   }
 };
 
-export default function Catalogos() {
+// Opciones para formulario de servicios
+const serviceTypes = [
+  'Capacitación',
+  'Consultoría',
+  'Mantenimiento',
+  'Instalación',
+  'Desarrollo de Software',
+  'Soporte Técnico',
+  'Auditoría',
+  'Diseño'
+];
+
+const modalityOptions = [
+  'Online',
+  'Presencial',
+  'Híbrido'
+];
+
+const equipmentTypeOptions = [
+  'Computadoras',
+  'Servidores',
+  'Redes',
+  'Impresoras',
+  'Equipos de comunicación',
+  'Equipos especializados',
+  'Otro'
+];
+
+const softwareTypeOptions = [
+  'Sitio Web',
+  'Aplicación Móvil',
+  'App de Escritorio',
+  'Sistema de Gestión',
+  'Base de Datos',
+  'API',
+  'Integración de Sistemas',
+  'Otro'
+];
+
+const locationTypeOptions = [
+  'Facultad',
+  'Dirección',
+  'Área',
+  'Departamento',
+  'Oficina',
+  'Otro'
+];
+
+const areaOptionsByType = {
+  facultad: ['Artes y Letras', 'Biología', 'Colegio Universitario San Gerónimo de La Habana', 'Comunicación', 'Contabilidad y Finanzas', 'Derecho', 'Economía', 'Facultad de Educación a Distancia', 'Facultad de Español para No Hispanohablantes', 'Farmacia y Alimentos', 'Filosofía e Historia', 'Física', 'Geografía', 'Instituto Superior de Diseño', 'Instituto Superior de Tecnologías y Ciencias Aplicadas', 'Lenguas Extranjeras', 'Matemática y Computación', 'Psicología', 'Química', 'Turismo'],
+  direccion: ['Vicerrectoría de Transformación Digital VRTD', 'Dirección de Servicios Tecnológicos DST', 'Dirección de Comunicaciones', 'Dirección de Innovación Digital DID', 'Rectorado'],
+  area: ['Comunicación', 'Artes y Letras', 'Jurídica', 'Técnica'],
+  departamento: ['Desarrollo', 'Soporte', 'Infraestructura', 'Gestión'],
+  oficina: ['Oficina Principal', 'Oficina Regional', 'Oficina Técnica']
+};
+
+export default function Pedidos() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const { currentUser } = useAuth();
   const { addNotification } = useNotifications();
   const { projects } = useProjects(currentUser?.id);
-
-  // Estados para modo oscuro
-  const { darkMode } = useTheme();
+  
+  // Hook para modo oscuro
+  const { darkMode } = useCustomTheme();
   const colors = darkMode ? COLORS.dark : COLORS.light;
 
-  // Estados para ordenamiento - siempre mostrar más reciente primero por defecto
+  // Estados para ordenamiento
   const [sortOrder, setSortOrder] = useState('newest');
   const [sortField, setSortField] = useState('date');
   const [sortDirection, setSortDirection] = useState('desc');
 
-  // Estado para editar pedido y modificarlo
+  // Estado para editar pedido
   const [editingOrderId, setEditingOrderId] = useState(null);
 
   // Redirigir a productos si es usuario común
@@ -357,30 +621,37 @@ export default function Catalogos() {
   const [productDialog, setProductDialog] = useState(null);
   const [uploadModal, setUploadModal] = useState(false);
   const [editMode, setEditMode] = useState(false);
+  
+  // Estado del formulario actualizado
   const [form, setForm] = useState({
     id: null,
     supplier: '',
     company: '',
     businessType: '',
+    website: '',
     dataType: 'both',
     companyImage: null,
     currency: 'CUP',
     contractActive: false,
     productsCount: 0,
-    servicesCount: 0
+    servicesCount: 0,
+    scrapingStatus: 'not_started',
+    scrapedProducts: []
   });
+  
   const [files, setFiles] = useState({
     products: null,
     services: null
   });
   const [loading, setLoading] = useState(false);
+  const [scrapingLoading, setScrapingLoading] = useState(false);
   const [errors, setErrors] = useState({});
   const [openPreview, setOpenPreview] = useState(false);
   const [showCart, setShowCart] = useState(false);
   const [previewType, setPreviewType] = useState('products');
   const [orderDetailsDialog, setOrderDetailsDialog] = useState(null);
 
-  // Estado para pedidos extras - CORREGIDO: agregar campo cantidad
+  // Estado para pedidos extras - ACTUALIZADO con campos para servicios
   const [specialOrderForm, setSpecialOrderForm] = useState({
     orderType: 'product',
     products: [{ 
@@ -388,11 +659,35 @@ export default function Catalogos() {
       description: '',
       equipmentType: '',
       characteristics: {},
-      quantity: 1 // agregar campo cantidad
+      quantity: 1
+    }],
+    services: [{ 
+      serviceType: '', 
+      description: '', 
+      scope: '', 
+      requirements: '',
+      quantity: 1,
+      participants: '',
+      days: '',
+      startDate: '',
+      modality: '',
+      locationType: '',
+      location: '',
+      equipmentType: '',
+      equipmentQuantity: '',
+      softwareType: '',
+      areaType: '',
+      area: '',
+      equipment: []
     }],
     currency: 'CUP',
     projectId: ''
   });
+
+  // Limpiar cachés viejas al iniciar
+  useEffect(() => {
+    clearOldImageCaches();
+  }, []);
 
   // Inicializar el contador de pedidos
   useEffect(() => {
@@ -432,7 +727,6 @@ export default function Catalogos() {
       });
       
       setAllProjects(allProjectsData);
-      console.log('Proyectos cargados en Pedidos:', allProjectsData.length);
     } catch (error) {
       console.error('Error al cargar proyectos en Pedidos:', error);
     }
@@ -449,9 +743,9 @@ export default function Catalogos() {
     localStorage.setItem(`OASiS_cart_${currentUser?.id}`, JSON.stringify(updatedCart));
   };
 
-  // Datos
+  // Datos con productos de scraping incluidos
   const allProducts = useMemo(() => {
-    return catalogs
+    const catalogProducts = catalogs
       .filter(c => c.dataType === 'products')
       .flatMap(c => c.data.map(p => ({
         ...p,
@@ -459,21 +753,55 @@ export default function Catalogos() {
         company: c.company,
         supplier: c.supplier,
         businessType: c.businessType,
-        companyColor: c.color || colors.borgundy,
-        contractActive: c.contractActive || false
+        companyColor: c.color || colors.primary,
+        contractActive: c.contractActive || false,
+        fromWebsite: p.fromWebsite || false,
+        website: p.website,
+        createdAt: c.createdAt || new Date().toISOString()
       })));
-  }, [catalogs, colors.borgundy]);
+    
+    // Agregar productos de scraping de las empresas
+    const scrapedProducts = catalogs
+      .filter(c => c.scrapedProducts && c.scrapedProducts.length > 0)
+      .flatMap(c => c.scrapedProducts.map(p => ({
+        ...p,
+        id: p.id || `scraped-${Date.now()}-${Math.random()}`,
+        company: c.company,
+        supplier: c.supplier,
+        businessType: c.businessType,
+        companyColor: c.color || colors.primary,
+        contractActive: c.contractActive || false,
+        fromWebsite: true,
+        website: c.website,
+        createdAt: c.updatedAt || new Date().toISOString()
+      })));
+    
+    // Ordenar por fecha de creación (más recientes primero)
+    return [...catalogProducts, ...scrapedProducts].sort((a, b) => {
+      const dateA = new Date(a.createdAt || 0);
+      const dateB = new Date(b.createdAt || 0);
+      return dateB - dateA;
+    });
+  }, [catalogs, colors.primary]);
 
   const allServices = useMemo(() => {
-    return catalogs
+    const services = catalogs
       .filter(c => c.dataType === 'services')
       .flatMap(c => c.data.map(s => ({
         ...s,
         id: s.id || Date.now() + Math.random(),
         company: c.company,
         supplier: c.supplier,
-        contractActive: c.contractActive || false
+        contractActive: c.contractActive || false,
+        createdAt: c.createdAt || new Date().toISOString()
       })));
+    
+    // Ordenar por fecha de creación (más recientes primero)
+    return services.sort((a, b) => {
+      const dateA = new Date(a.createdAt || 0);
+      const dateB = new Date(b.createdAt || 0);
+      return dateB - dateA;
+    });
   }, [catalogs]);
 
   const companies = useMemo(() => {
@@ -526,214 +854,16 @@ export default function Catalogos() {
     return inactiveItems.length > 0;
   };
 
-  // Navegación lateral
-  const views = currentUser?.role === 'admin' 
-    ? ['products', 'services', 'special-orders', 'history', 'companies']
-    : ['products', 'services', 'special-orders', 'history'];
-  const currentIndex = views.indexOf(viewMode);
-  const prevView = currentIndex > 0 ? views[currentIndex - 1] : null;
-  const nextView = currentIndex < views.length - 1 ? views[currentIndex + 1] : null;
-
-  const goToPrev = () => {
-    if (prevView) setViewMode(prevView);
-  };
-
-  const goToNext = () => {
-    if (nextView) setViewMode(nextView);
-  };
-
-// Función para limpiar cachés viejas
-const clearOldImageCaches = () => {
-  try {
-    const oneDayAgo = Date.now() - (24 * 60 * 60 * 1000);
-    const keysToRemove = [];
-    
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key && key.startsWith('image_cache_')) {
-        try {
-          const cacheData = JSON.parse(localStorage.getItem(key));
-          if (cacheData.timestamp < oneDayAgo) {
-            keysToRemove.push(key);
-          }
-        } catch (e) {
-          // Si el cache está corrupto, eliminarlo
-          keysToRemove.push(key);
-        }
-      }
-    }
-    
-    // Eliminar cachés viejas
-    keysToRemove.forEach(key => localStorage.removeItem(key));
-    console.log(`Limpiadas ${keysToRemove.length} cachés viejas`);
-  } catch (error) {
-    console.error('Error limpiando cachés:', error);
-  }
-};
-
-// Componente de imagen con CACHÉ y DEBOUNCE
-const EnhancedProductImage = ({ productName, alt, sx, ...props }) => {
-  const [imageUrl, setImageUrl] = useState(DEFAULT_IMAGE);
-  const [loading, setLoading] = useState(true);
-  const [cacheKey] = useState(() => `image_cache_${productName?.toLowerCase()?.trim()}`);
-
-  useEffect(() => {
-    // Si no hay nombre de producto, usar imagen por defecto
-    if (!productName) {
-      setImageUrl(DEFAULT_IMAGE);
-      setLoading(false);
-      return;
-    }
-
-    // 1. VERIFICAR CACHÉ LOCAL PRIMERO
-    const cachedImage = localStorage.getItem(cacheKey);
-    if (cachedImage) {
-      // Verificar si la imagen cacheada todavía es válida (menos de 24 horas)
-      try {
-        const cacheData = JSON.parse(cachedImage);
-        const cacheAge = Date.now() - cacheData.timestamp;
-        const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 horas
-        
-        if (cacheAge < CACHE_DURATION) {
-          setImageUrl(cacheData.url);
-          setLoading(false);
-          return;
-        }
-      } catch (error) {
-        // Si hay error al parsear, limpiar cache corrupta
-        localStorage.removeItem(cacheKey);
-      }
-    }
-
-    // 2. DEBOUNCE: Esperar antes de cargar
-    setLoading(true);
-    
-    // Crear un timer para evitar múltiples llamadas rápidas
-    const debounceTimer = setTimeout(async () => {
-      try {
-        const url = await getEnhancedImageForProduct(productName);
-        
-        // 3. GUARDAR EN CACHÉ
-        const cacheData = {
-          url: url,
-          timestamp: Date.now(),
-          productName: productName
-        };
-        
-        try {
-          localStorage.setItem(cacheKey, JSON.stringify(cacheData));
-        } catch (storageError) {
-          // Si localStorage está lleno, limpiar cachés viejas
-          console.warn('LocalStorage lleno, limpiando cachés viejas...');
-          clearOldImageCaches();
-        }
-        
-        setImageUrl(url);
-      } catch (error) {
-        console.error('Error cargando imagen:', error);
-        setImageUrl(DEFAULT_IMAGE);
-        
-        // Guardar en caché la imagen por defecto para evitar reintentos
-        const defaultCacheData = {
-          url: DEFAULT_IMAGE,
-          timestamp: Date.now(),
-          productName: productName,
-          isDefault: true
-        };
-        
-        try {
-          localStorage.setItem(cacheKey, JSON.stringify(defaultCacheData));
-        } catch (e) {
-          // Ignorar errores de almacenamiento
-        }
-      } finally {
-        setLoading(false);
-      }
-    }, 300); // 300ms de debounce
-
-    // Limpiar timer si el componente se desmonta o cambia el productName
-    return () => {
-      clearTimeout(debounceTimer);
-    };
-  }, [productName, cacheKey]); // Solo dependencias necesarias
-
-  return (
-    <Box sx={{ 
-      position: 'relative',
-      width: '100%',
-      height: '100%',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      ...sx 
-    }}>
-      {loading && (
-        <CircularProgress 
-          size={20} 
-          sx={{ 
-            position: 'absolute',
-            color: colors.borgundy
-          }} 
-        />
-      )}
-      
-      <img
-        src={imageUrl}
-        alt={alt || productName || 'Producto'}
-        style={{
-          width: '100%',
-          height: '100%',
-          objectFit: 'contain',
-          opacity: loading ? 0.5 : 1,
-          transition: 'opacity 0.3s ease',
-        }}
-        loading="lazy" // Carga diferida
-        onError={(e) => {
-          console.warn(`Error cargando imagen para: ${productName}`);
-          e.target.src = DEFAULT_IMAGE;
-        }}
-      />
-    </Box>
-  );
-};
-
-// FUNCIONES AUXILIARES PARA EL CACHÉ
-
-// Función para precargar imágenes comunes
-const preloadCommonImages = () => {
-  const commonProducts = [
-    'teclado', 'mouse', 'laptop', 'monitor', 'impresora',
-    'disco duro', 'memoria usb', 'router', 'cable'
-  ];
-  
-  commonProducts.forEach(product => {
-    const cacheKey = `image_cache_${product}`;
-    if (!localStorage.getItem(cacheKey)) {
-      // Precargar en segundo plano
-      setTimeout(() => {
-        getEnhancedImageForProduct(product).then(url => {
-          const cacheData = {
-            url: url,
-            timestamp: Date.now(),
-            productName: product,
-            preloaded: true
-          };
-          localStorage.setItem(cacheKey, JSON.stringify(cacheData));
-        }).catch(() => {
-          // Ignorar errores de precarga
-        });
-      }, 1000); // Retrasar la precarga 1 segundo
-    }
-  });
-};
-
   // Añadir al carrito
   const addToCart = (item) => {
-    // Restringir si es comercial
-    if (currentUser?.role === 'comercial') {
+    // Permitir a admin, comercial y gestor realizar compras
+    // Solo restringir si el rol no tiene permisos
+    const allowedRoles = ['admin', 'user', 'comercial', 'gestor'];
+    
+    if (!allowedRoles.includes(currentUser?.role)) {
       addNotification({
         title: 'Acción no permitida',
-        message: 'Los comerciales no pueden realizar compras',
+        message: 'No tienes permisos para realizar compras',
         type: 'error'
       });
       return;
@@ -801,7 +931,7 @@ const preloadCommonImages = () => {
     });
   };
 
-  // Cambiar cantidad
+  // Cambiar cantidad - CORREGIDO para cambiar de 1 en 1
   const updateQuantity = (id, delta) => {
     setCart(prev => {
       const updated = prev.map(item =>
@@ -817,7 +947,7 @@ const preloadCommonImages = () => {
     saveCart([]);
   };
 
-  // CORREGIDO: Función para eliminar items del carrito
+  // Función para eliminar items del carrito
   const removeFromCart = (id) => {
     setCart(prev => {
       const updated = prev.filter(item => item.id !== id);
@@ -838,7 +968,6 @@ const preloadCommonImages = () => {
     
     purchases.forEach(purchase => {
       if (purchase.type === 'special') {
-        // PROCESAR PEDIDOS EXTRA (productos o servicios)
         separatedPurchases.push({
           ...purchase,
           id: purchase.id + '-special',
@@ -857,7 +986,6 @@ const preloadCommonImages = () => {
         );
 
         if (hasMixedItems) {
-          // Separar productos y servicios en solicitudes distintas con números diferentes
           const productItems = purchase.items.filter(item => 
             item.dataType === 'products' || (!item.dataType && item.name)
           );
@@ -866,7 +994,6 @@ const preloadCommonImages = () => {
             item.dataType === 'services' || (!item.dataType && item.service)
           );
           
-          // Crear solicitudes separadas para productos
           if (productItems.length > 0) {
             separatedPurchases.push({
               ...purchase,
@@ -878,7 +1005,6 @@ const preloadCommonImages = () => {
             });
           }
           
-          // Crear solicitudes separadas para servicios
           if (serviceItems.length > 0) {
             separatedPurchases.push({
               ...purchase,
@@ -890,7 +1016,6 @@ const preloadCommonImages = () => {
             });
           }
         } else {
-          // Si no hay items mezclados, mantener como está
           const orderType = purchase.items[0].dataType === 'services' ? 'SERV' : 'PROD';
           separatedPurchases.push({
             ...purchase,
@@ -899,7 +1024,6 @@ const preloadCommonImages = () => {
           });
         }
       } else {
-        // Para pedidos sin items
         separatedPurchases.push({
           ...purchase,
           category: 'General',
@@ -912,7 +1036,7 @@ const preloadCommonImages = () => {
     return separatedPurchases;
   };
 
-  // CORREGIDO: Función para validar si se puede finalizar la compra
+  // Función para validar si se puede finalizar la compra
   const canFinalizePurchase = useCallback(() => {
     if (cart.length === 0) return false;
     if (!selectedProject) return false;
@@ -951,11 +1075,10 @@ const preloadCommonImages = () => {
 
     if (insufficientStockItems.length > 0) return false;
 
-    // CORREGIDO: Validar presupuesto - debe ser menor o igual al presupuesto restante
+    // Validar presupuesto
     const total = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
     const budget = parseFloat(project.budget) || 0;
     
-    // Calcular gastos existentes excluyendo el pedido en edición
     const existingPurchases = JSON.parse(localStorage.getItem('OASiS_purchases') || '[]');
     const existingSpecialOrders = JSON.parse(localStorage.getItem('OASiS_special_orders') || '[]');
     const projectExistingOrders = [...existingPurchases, ...existingSpecialOrders].filter(order => 
@@ -969,16 +1092,15 @@ const preloadCommonImages = () => {
     const totalSpent = existingSpent + total;
     const remainingBudget = budget - totalSpent;
 
-    // CORRECCIÓN: Permitir compra si el total es menor o igual al presupuesto restante
     return totalSpent <= budget;
   }, [cart, selectedProject, projects, catalogs, editingOrderId]);
 
-  // CORREGIDO: Finalizar compra - FUNCIÓN PRINCIPAL
+  // Finalizar compra
   const checkout = () => {
     if (!canFinalizePurchase()) {
       addNotification({
         title: 'No se puede finalizar la compra',
-        message: 'No se cumplen las condiciones para finalizar la compra. Verifique el presupuesto, disponibilidad y empresas activas.',
+        message: 'No se cumplen las condiciones para finalizar la compra.',
         type: 'error'
       });
       return;
@@ -994,18 +1116,15 @@ const preloadCommonImages = () => {
       return;
     }
 
-    // Si todas las validaciones pasan, proceder con la compra
     try {
       let updatedPurchases = [...purchases];
       
-      // CORREGIDO: Si estamos editando, eliminar el pedido anterior
       if (editingOrderId) {
         updatedPurchases = purchases.filter(p => p.id !== editingOrderId);
       }
 
       const total = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
       
-      // Crear nueva solicitud de compra
       const newPurchase = {
         id: editingOrderId || orderCounter++,
         user: currentUser.fullName,
@@ -1032,12 +1151,11 @@ const preloadCommonImages = () => {
         currency: 'CUP' 
       };
 
-      // Agregar el nuevo pedido
       updatedPurchases = [...updatedPurchases, newPurchase];
       setPurchases(updatedPurchases);
       localStorage.setItem('OASiS_purchases', JSON.stringify(updatedPurchases));
 
-      // CORREGIDO: Actualizar inventario
+      // Actualizar inventario
       const updatedCatalogs = [...catalogs];
       cart.forEach(cartItem => {
         if (cartItem.dataType === 'products') {
@@ -1051,7 +1169,6 @@ const preloadCommonImages = () => {
             );
             
             if (productIndex !== -1) {
-              // Si estamos editando, revertir cambios anteriores
               if (editingOrderId) {
                 const originalOrder = purchases.find(p => p.id === editingOrderId);
                 if (originalOrder) {
@@ -1062,7 +1179,6 @@ const preloadCommonImages = () => {
                 }
               }
               
-              // Aplicar la nueva cantidad
               updatedCatalogs[catalogIndex].data[productIndex].stock -= cartItem.quantity;
               if (updatedCatalogs[catalogIndex].data[productIndex].stock <= 0) {
                 updatedCatalogs[catalogIndex].data[productIndex].availability = 'Agotado';
@@ -1075,17 +1191,14 @@ const preloadCommonImages = () => {
         }
       });
 
-      // Guardar cambios en inventario
       setCatalogs(updatedCatalogs);
       localStorage.setItem('OASiS_catalogs', JSON.stringify(updatedCatalogs));
 
-      // Limpiar carrito y estado
       clearCart();
       setSelectedProject('');
       setShowCart(false);
       setEditingOrderId(null); 
       
-      // Calcular presupuesto restante para el mensaje
       const budget = parseFloat(project.budget) || 0;
       const existingPurchases = JSON.parse(localStorage.getItem('OASiS_purchases') || '[]');
       const existingSpecialOrders = JSON.parse(localStorage.getItem('OASiS_special_orders') || '[]');
@@ -1095,21 +1208,19 @@ const preloadCommonImages = () => {
       const totalSpent = projectExistingOrders.reduce((sum, order) => sum + (parseFloat(order.total) || 0), 0);
       const remainingBudget = budget - totalSpent;
 
-      // Mostrar confirmación al usuario
       addNotification({
         title: editingOrderId ? 'Solicitud actualizada' : 'Solicitud enviada',
         message: `Tu solicitud de compra para el proyecto "${project.name}" ha sido ${editingOrderId ? 'actualizada' : 'enviada'} exitosamente. Presupuesto restante: $${remainingBudget.toFixed(2)} CUP.`,
         type: 'success'
       });
 
-      // Redirigir al historial
       setViewMode('history');
       
     } catch (error) {
       console.error('Error al procesar la compra:', error);
       addNotification({
         title: 'Error',
-        message: 'Ocurrió un error al procesar tu solicitud. Por favor, intenta nuevamente.',
+        message: 'Ocurrió un error al procesar tu solicitud.',
         type: 'error'
       });
     }
@@ -1165,7 +1276,7 @@ const preloadCommonImages = () => {
                   price: parseFloat(obj.precio) || 0,
                   duration: obj.duracion || 'N/A',
                   description: obj.descripcion || '',
-                  note: obj.nota || 'El precio total puede variar dependiendo de la dificultad'
+                  note: obj.nota || 'El precio total puede variar'
                 };
           }).filter(item => item.name !== 'Sin nombre');
 
@@ -1203,95 +1314,58 @@ const preloadCommonImages = () => {
     setErrors({ ...errors, [type]: null });
   };
 
-  // Funciones para servicios
-  const handleAddServiceField = () => {
-    setSpecialOrderForm({
-      ...specialOrderForm,
-      services: [...specialOrderForm.services, { 
-        serviceType: '', 
-        description: '', 
-        scope: '', 
-        requirements: '',
-      }]
-    });
-  };
-
-  const handleRemoveServiceField = (index) => {
-    if (specialOrderForm.services.length > 1) {
-      const newServices = [...specialOrderForm.services];
-      newServices.splice(index, 1);
-      setSpecialOrderForm({
-        ...specialOrderForm,
-        services: newServices
-      });
+  // Función para realizar scraping de website
+  const handleWebsiteScraping = async () => {
+    if (!form.website) {
+      setErrors({ ...errors, website: 'Ingrese una URL válida' });
+      return;
     }
-  };
 
-  const handleServiceFieldChange = (index, field, value) => {
-    const newServices = [...specialOrderForm.services];
-    newServices[index][field] = value;
-    setSpecialOrderForm({
-      ...specialOrderForm,
-      services: newServices
-    });
-  };
-
-  // Función para manejar cambios en equipos
-  const handleEquipmentTypeChange = (index, equipmentType) => {
-    const newProducts = [...specialOrderForm.products];
-    newProducts[index] = {
-      ...newProducts[index],
-      equipmentType,
-      characteristics: {}
-    };
-    setSpecialOrderForm({
-      ...specialOrderForm,
-      products: newProducts
-    });
-  };
-
-  // Función para manejar cambios en características
-  const handleCharacteristicChange = (index, charKey, value) => {
-    const newProducts = [...specialOrderForm.products];
-    newProducts[index] = {
-      ...newProducts[index],
-      characteristics: {
-        ...newProducts[index].characteristics,
-        [charKey]: value
+    try {
+      setScrapingLoading(true);
+      
+      // Validar URL
+      const urlPattern = /^(https?:\/\/)?([\da-z\.-]+)\.([a-z\.]{2,6})([\/\w \.-]*)*\/?$/;
+      if (!urlPattern.test(form.website)) {
+        throw new Error('URL inválida');
       }
-    };
-    setSpecialOrderForm({
-      ...specialOrderForm,
-      products: newProducts
-    });
-  };
 
-  // Función para generar descripción automática
-  const handleGenerateDescription = (index) => {
-    const product = specialOrderForm.products[index];
-    if (product.equipmentType && Object.keys(product.characteristics).length > 0) {
-      const baseDescription = generateEquipmentDescription(product.equipmentType, product.characteristics);
+      // Agregar https:// si no tiene protocolo
+      const websiteUrl = form.website.startsWith('http') ? form.website : `https://${form.website}`;
       
-      // Agregar cantidad a la descripción
-      const quantity = product.quantity || 1;
-      const descriptionWithQuantity = `${baseDescription} | Cantidad: ${quantity}`;
+      // Realizar scraping
+      const scrapedProducts = await scrapeWebsiteProducts(websiteUrl);
       
-      const newProducts = [...specialOrderForm.products];
-      newProducts[index].description = descriptionWithQuantity;
-      setSpecialOrderForm({
-        ...specialOrderForm,
-        products: newProducts
-      });
+      // Actualizar estado del formulario
+      setForm(prev => ({
+        ...prev,
+        scrapingStatus: 'success',
+        scrapedProducts: scrapedProducts
+      }));
       
       addNotification({
-        title: 'Descripción generada',
-        message: 'Se ha generado automáticamente la descripción del equipo incluyendo cantidad',
+        title: 'Scraping completado',
+        message: `Se encontraron ${scrapedProducts.length} productos en la tienda online`,
         type: 'success'
       });
+      
+    } catch (error) {
+      console.error('Error en scraping:', error);
+      setForm(prev => ({
+        ...prev,
+        scrapingStatus: 'error'
+      }));
+      addNotification({
+        title: 'Error en scraping',
+        message: error.message || 'No se pudieron obtener productos del sitio web',
+        type: 'error'
+      });
+    } finally {
+      setScrapingLoading(false);
     }
   };
 
-  // Función para guardar empresa
+  // Función para guardar empresa con scraping
   const handleSubmit = async () => {
     console.log('🚀 Iniciando guardado de empresa...', { form, editMode });
     
@@ -1305,26 +1379,45 @@ const preloadCommonImages = () => {
       let updatedCatalogs = [...catalogs];
       const timestamp = new Date().toISOString();
       
-      // Buscar empresa existente por ID en lugar de solo por nombre
-      const existingCompanyCatalogs = editMode 
-        ? catalogs.filter(c => {
-            const baseId = c.id ? c.id.replace('-products', '').replace('-services', '') : '';
-            return baseId === form.id;
-          })
-        : [];
-
+      // Generar ID único para nueva empresa
+      const newCompanyId = editMode ? form.id : Date.now().toString();
+      
+      // En modo edición, buscar por ID específico
+      // En modo creación, verificar si ya existe empresa con el mismo nombre
+      let existingCompanyCatalogs = [];
+      let oldCompanyName = form.company;
+      
+      if (editMode) {
+        // En modo edición: buscar por ID
+        existingCompanyCatalogs = catalogs.filter(c => {
+          const baseId = c.id ? c.id.replace('-products', '').replace('-services', '') : '';
+          return baseId === form.id;
+        });
+        
+        if (existingCompanyCatalogs.length > 0) {
+          oldCompanyName = existingCompanyCatalogs[0].company;
+        }
+      } else {
+        // En modo creación: verificar si ya existe empresa con el mismo nombre
+        existingCompanyCatalogs = catalogs.filter(c => 
+          c.company.toLowerCase() === form.company.toLowerCase()
+        );
+        
+        // Si ya existe una empresa con el mismo nombre, mostrar error
+        if (existingCompanyCatalogs.length > 0) {
+          throw new Error(`Ya existe una empresa registrada con el nombre "${form.company}". Use otro nombre o edite la empresa existente.`);
+        }
+      }
+      
       const existingProductCatalog = existingCompanyCatalogs.find(c => c.dataType === 'products');
       const existingServiceCatalog = existingCompanyCatalogs.find(c => c.dataType === 'services');
       
-      // Obtener el nombre ANTIGUO de la empresa para actualizar referencias
-      const oldCompanyName = editMode && existingCompanyCatalogs.length > 0 
-        ? existingCompanyCatalogs[0].company 
-        : form.company;
-
       console.log('🔄 Datos para actualización:', {
+        editMode,
         existingCompanyCatalogs: existingCompanyCatalogs.length,
         oldCompanyName,
-        newCompanyName: form.company
+        newCompanyName: form.company,
+        newCompanyId
       });
 
       // Procesar catálogo de productos
@@ -1335,14 +1428,21 @@ const preloadCommonImages = () => {
         productData = existingProductCatalog.data;
       }
 
-      if (productData.length > 0 || (editMode && files.products === null && existingProductCatalog)) {
+      // Incluir productos de scraping solo si se realizó scraping
+      const finalProductData = files.products ? 
+        [...productData] : // Si hay archivo nuevo, usar solo esos datos
+        [...productData, ...form.scrapedProducts]; // Si no hay archivo, agregar scraping
+
+      if (finalProductData.length > 0 || (editMode && files.products === null && existingProductCatalog)) {
         const productCatalog = {
-          id: `${form.id}-products`,
+          id: `${newCompanyId}-products`,
           supplier: form.supplier,
           company: form.company,
           businessType: form.businessType,
+          website: form.website,
           dataType: 'products',
-          data: productData,
+          data: finalProductData,
+          scrapedProducts: form.scrapedProducts,
           companyImage: form.companyImage,
           currency: form.currency,
           contractActive: form.contractActive,
@@ -1350,10 +1450,13 @@ const preloadCommonImages = () => {
           updatedAt: timestamp,
         };
 
-        // Eliminar catálogos existentes por ID en lugar de solo por nombre
-        updatedCatalogs = updatedCatalogs.filter(c => 
-          !(c.id === `${form.id}-products`)
-        );
+        // En modo creación, solo agregar, no eliminar
+        if (editMode) {
+          // En modo edición: eliminar catálogo existente y agregar nuevo
+          updatedCatalogs = updatedCatalogs.filter(c => 
+            !(c.id === `${newCompanyId}-products`)
+          );
+        }
         updatedCatalogs.push(productCatalog);
       }
 
@@ -1367,10 +1470,11 @@ const preloadCommonImages = () => {
 
       if (serviceData.length > 0 || (editMode && files.services === null && existingServiceCatalog)) {
         const serviceCatalog = {
-          id: `${form.id}-services`,
+          id: `${newCompanyId}-services`,
           supplier: form.supplier,
           company: form.company,
           businessType: form.businessType,
+          website: form.website,
           dataType: 'services',
           data: serviceData,
           companyImage: form.companyImage,
@@ -1380,14 +1484,17 @@ const preloadCommonImages = () => {
           updatedAt: timestamp,
         };
 
-        // Eliminar catálogos existentes por ID
-        updatedCatalogs = updatedCatalogs.filter(c => 
-          !(c.id === `${form.id}-services`)
-        );
+        // En modo creación, solo agregar, no eliminar
+        if (editMode) {
+          // En modo edición: eliminar catálogo existente y agregar nuevo
+          updatedCatalogs = updatedCatalogs.filter(c => 
+            !(c.id === `${newCompanyId}-services`)
+          );
+        }
         updatedCatalogs.push(serviceCatalog);
       }
 
-      // Actualizar referencias SOLO si el nombre de la empresa cambió
+      // Solo actualizar referencias si estamos editando y el nombre cambió
       let updatedPurchases = [...purchases];
       let updatedSpecialOrders = [...specialOrders];
       
@@ -1435,16 +1542,19 @@ const preloadCommonImages = () => {
       
       // Resetear formulario correctamente
       setForm({ 
-        id: null, 
+        id: null,
         supplier: '', 
         company: '', 
         businessType: '', 
+        website: '',
         dataType: 'both',
         companyImage: null,
         currency: 'CUP',
         contractActive: false,
         productsCount: 0,
-        servicesCount: 0
+        servicesCount: 0,
+        scrapingStatus: 'not_started',
+        scrapedProducts: []
       });
       setFiles({ products: null, services: null });
       setUploadModal(false);
@@ -1455,8 +1565,8 @@ const preloadCommonImages = () => {
       console.log('✅ Empresa guardada exitosamente');
       
       addNotification({
-        title: editMode ? 'Empresa actualizada' : 'Nueva empresa',
-        message: `Se ${editMode ? 'actualizó' : 'agregó'} la empresa ${form.company}`,
+        title: editMode ? 'Empresa actualizada' : 'Nueva empresa creada',
+        message: `Se ${editMode ? 'actualizó' : 'creó'} la empresa "${form.company}" exitosamente`,
         type: 'success'
       });
     } catch (err) {
@@ -1481,41 +1591,36 @@ const preloadCommonImages = () => {
   const handleEditCatalog = (companyData) => {
     console.log('🔄 Iniciando edición de empresa:', companyData);
     
-    // Buscar TODOS los catálogos de esta empresa
     const companyCatalogs = catalogs.filter(c => c.company === companyData.company);
     const productCatalog = companyCatalogs.find(c => c.dataType === 'products');
     const serviceCatalog = companyCatalogs.find(c => c.dataType === 'services');
-    
-    // Obtener el primer catálogo para datos base (puede ser products o services)
     const baseCatalog = productCatalog || serviceCatalog || companyCatalogs[0] || {};
     
-    console.log('📊 Catálogos encontrados:', {
-      companyCatalogs: companyCatalogs.length,
-      productCatalog: !!productCatalog,
-      serviceCatalog: !!serviceCatalog,
-      baseCatalog
-    });
+    // Extraer el ID base correctamente
+    const baseId = baseCatalog.id ? 
+      baseCatalog.id.replace('-products', '').replace('-services', '') : 
+      Date.now().toString();
     
-    // Usar los datos REALES del catálogo base
     setForm({
-      id: baseCatalog.id ? baseCatalog.id.replace('-products', '').replace('-services', '') : Date.now().toString(),
+      id: baseId, // Usar el ID existente
       supplier: baseCatalog.supplier || '',
       company: baseCatalog.company || '',
       businessType: baseCatalog.businessType || '',
+      website: baseCatalog.website || '',
       dataType: 'both',
       companyImage: baseCatalog.companyImage || null,
       currency: baseCatalog.currency || 'CUP',
       contractActive: baseCatalog.contractActive || false,
       productsCount: productCatalog ? productCatalog.data.length : 0,
       servicesCount: serviceCatalog ? serviceCatalog.data.length : 0,
+      scrapingStatus: baseCatalog.scrapingStatus || 'not_started',
+      scrapedProducts: baseCatalog.scrapedProducts || []
     });
     
     setFiles({ products: null, services: null });
     setEditMode(true);
     setUploadModal(true);
     setErrors({});
-    
-    console.log('✅ Formulario cargado para edición:', form);
   };
 
   const handleDeleteCatalog = (id) => {
@@ -1528,6 +1633,31 @@ const preloadCommonImages = () => {
         message: 'El catálogo ha sido removido del sistema',
         type: 'warning'
       });
+    }
+  };
+
+  // Función para eliminar empresa
+  const handleDeleteCompany = (companyName) => {
+    if (window.confirm(`¿Está seguro de eliminar la empresa "${companyName}" y todos sus catálogos?`)) {
+      try {
+        // Eliminar solo los catálogos de esta empresa específica
+        const updated = catalogs.filter(c => c.company !== companyName);
+        setCatalogs(updated);
+        localStorage.setItem('OASiS_catalogs', JSON.stringify(updated));
+        
+        addNotification({
+          title: 'Empresa eliminada',
+          message: `La empresa "${companyName}" ha sido eliminada del sistema`,
+          type: 'warning'
+        });
+      } catch (error) {
+        console.error('Error eliminando empresa:', error);
+        addNotification({
+          title: 'Error',
+          message: 'No se pudo eliminar la empresa',
+          type: 'error'
+        });
+      }
     }
   };
 
@@ -1567,10 +1697,9 @@ const preloadCommonImages = () => {
   const cartTotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
   const selectedProjectObj = projects.find(p => p.id === selectedProject);
   
-  // CORREGIDO: Calcular presupuesto restante correctamente
   const remainingBudget = selectedProjectObj ? getRemainingBudget(selectedProjectObj) - cartTotal : 0;
 
-  // Funciones para manejar pedidos extras - CORREGIDAS: incluir cantidad
+  // Funciones para manejar pedidos extras - ACTUALIZADAS
   const handleAddProductField = () => {
     setSpecialOrderForm({
       ...specialOrderForm,
@@ -1579,7 +1708,7 @@ const preloadCommonImages = () => {
         description: '', 
         equipmentType: '', 
         characteristics: {},
-        quantity: 1 // agregar campo cantidad
+        quantity: 1
       }]
     });
   };
@@ -1604,7 +1733,97 @@ const preloadCommonImages = () => {
     });
   };
 
-  // Función para enviar pedidos extras con cantidad
+  const handleAddServiceField = () => {
+    setSpecialOrderForm({
+      ...specialOrderForm,
+      services: [...specialOrderForm.services, { 
+        serviceType: '', 
+        description: '', 
+        scope: '', 
+        requirements: '',
+        quantity: 1,
+        participants: '',
+        days: '',
+        startDate: '',
+        modality: '',
+        locationType: '',
+        location: '',
+        equipmentType: '',
+        equipmentQuantity: '',
+        softwareType: '',
+        areaType: '',
+        area: '',
+        equipment: []
+      }]
+    });
+  };
+
+  const handleRemoveServiceField = (index) => {
+    if (specialOrderForm.services.length > 1) {
+      const newServices = [...specialOrderForm.services];
+      newServices.splice(index, 1);
+      setSpecialOrderForm({
+        ...specialOrderForm,
+        services: newServices
+      });
+    }
+  };
+
+  const handleServiceFieldChange = (index, field, value) => {
+    const newServices = [...specialOrderForm.services];
+    newServices[index][field] = value;
+    setSpecialOrderForm({
+      ...specialOrderForm,
+      services: newServices
+    });
+  };
+
+  const handleEquipmentTypeChange = (index, equipmentType) => {
+    const newProducts = [...specialOrderForm.products];
+    newProducts[index] = {
+      ...newProducts[index],
+      equipmentType,
+      characteristics: {}
+    };
+    setSpecialOrderForm({
+      ...specialOrderForm,
+      products: newProducts
+    });
+  };
+
+  const handleCharacteristicChange = (index, charKey, value) => {
+    const newProducts = [...specialOrderForm.products];
+    newProducts[index] = {
+      ...newProducts[index],
+      characteristics: {
+        ...newProducts[index].characteristics,
+        [charKey]: value
+      }
+    };
+    setSpecialOrderForm({
+      ...specialOrderForm,
+      products: newProducts
+    });
+  };
+
+  // Función para manejar equipamiento Online
+  const handleEquipmentChange = (index, equipment, checked) => {
+    const newServices = [...specialOrderForm.services];
+    const equipmentArray = newServices[index].equipment || [];
+    
+    if (checked) {
+      newServices[index].equipment = [...equipmentArray, equipment];
+    } else {
+      newServices[index].equipment = equipmentArray.filter(item => item !== equipment);
+    }
+    
+    setSpecialOrderForm({
+      ...specialOrderForm,
+      services: newServices
+    });
+  };
+
+  // Función para enviar pedidos extras - ACTUALIZADA
   const handleSpecialOrderSubmit = () => {
     if (!specialOrderForm.projectId) {
       addNotification({
@@ -1660,7 +1879,7 @@ const preloadCommonImages = () => {
               description: product.description,
               equipmentType: product.equipmentType,
               characteristics: product.characteristics,
-              quantity: product.quantity || 1, // incluir cantidad
+              quantity: product.quantity || 1,
               type: 'product'
             };
           }
@@ -1669,7 +1888,7 @@ const preloadCommonImages = () => {
             description: product.description,
             equipmentType: null,
             characteristics: {},
-            quantity: product.quantity || 1, // incluir cantidad
+            quantity: product.quantity || 1,
             type: 'product'
           };
         });
@@ -1681,12 +1900,23 @@ const preloadCommonImages = () => {
           description: service.description,
           scope: service.scope,
           requirements: service.requirements,
-          quantity: service.quantity || 1, // incluir cantidad
-          type: 'service'
+          quantity: service.quantity || 1,
+          type: 'service',
+          participants: service.participants,
+          days: service.days,
+          startDate: service.startDate,
+          modality: service.modality,
+          locationType: service.locationType,
+          location: service.location,
+          equipmentType: service.equipmentType,
+          equipmentQuantity: service.equipmentQuantity,
+          softwareType: service.softwareType,
+          areaType: service.areaType,
+          area: service.area,
+          equipment: service.equipment || []
         }));
     }
 
-    // Calcular prioridad basada en la fecha de vencimiento del proyecto
     const calculatePriority = (endDate) => {
       const today = new Date();
       const end = new Date(endDate);
@@ -1698,7 +1928,6 @@ const preloadCommonImages = () => {
       return 'Baja';
     };
 
-    // En handleSpecialOrderSubmit, actualiza la creación del special order:
     const newSpecialOrder = {
       id: editingOrderId || orderCounter++,
       userId: currentUser.id,
@@ -1710,22 +1939,35 @@ const preloadCommonImages = () => {
       area: getUserArea(currentUser.id),
       orderType: specialOrderForm.orderType,
       items: processedItems,
+      serviceDetails: specialOrderForm.orderType === 'service' ? 
+        specialOrderForm.services.reduce((details, service, index) => ({
+          ...details,
+          [`service_${index}`]: {
+            serviceType: service.serviceType,
+            modality: service.modality,
+            participants: service.participants,
+            days: service.days,
+            startDate: service.startDate,
+            locationType: service.locationType,
+            location: service.location,
+            requirements: service.requirements,
+            equipmentType: service.equipmentType,
+            equipmentQuantity: service.equipmentQuantity,
+            softwareType: service.softwareType,
+            areaType: service.areaType,
+            area: service.area,
+            equipment: service.equipment || []
+          }
+        }), {}) : {},
       currency: specialOrderForm.currency,
-      date: editingOrderId ? specialOrders.find(so => so.id === editingOrderId)?.date || new Date().toISOString() : new Date().toISOString(), // Mantener fecha original
+      date: editingOrderId ? specialOrders.find(so => so.id === editingOrderId)?.date || new Date().toISOString() : new Date().toISOString(),
       status: 'Pendiente',
       priority: calculatePriority(project.endDate),
       type: 'special',
       category: `P.Extra-${specialOrderForm.orderType}`
     };
 
-    console.log('Nuevo pedido extra creado con datos:', {
-      projectNumber: newSpecialOrder.projectNumber,
-      costCenter: newSpecialOrder.costCenter,
-      project: newSpecialOrder.project
-    });
-
     try {
-      // Si estamos editando, eliminar el pedido anterior
       let updatedSpecialOrders = [...specialOrders];
       if (editingOrderId) {
         updatedSpecialOrders = specialOrders.filter(so => so.id !== editingOrderId);
@@ -1735,11 +1977,12 @@ const preloadCommonImages = () => {
       setSpecialOrders(updatedSpecialOrders);
       localStorage.setItem('OASiS_special_orders', JSON.stringify(updatedSpecialOrders));
 
+      // Crear notificación para Mensajes
       const notificationMsg = {
         id: `notif_${Date.now()}`,
         type: 'extra_order',
         title: `Nuevo Pedido Extra - ${specialOrderForm.orderType === 'product' ? 'Producto' : 'Servicio'}`,
-        content: `Se ha solicitado un pedido extra de ${specialOrderForm.orderType === 'product' ? 'producto' : 'servicio'} para el proyecto ${project.name}`,
+        content: `Se ha solicitado un pedido extra para el proyecto ${project.name}`,
         senderId: currentUser.id,
         senderName: currentUser.fullName,
         recipientId: 'admin',
@@ -1752,6 +1995,7 @@ const preloadCommonImages = () => {
         details: JSON.stringify({
           orderType: specialOrderForm.orderType,
           items: processedItems,
+          serviceDetails: specialOrderForm.orderType === 'service' ? newSpecialOrder.serviceDetails : null,
           currency: specialOrderForm.currency
         }, null, 2)
       };
@@ -1759,20 +2003,38 @@ const preloadCommonImages = () => {
       const existingMessages = JSON.parse(localStorage.getItem('SiPP_messages') || '[]');
       localStorage.setItem('SiPP_messages', JSON.stringify([...existingMessages, notificationMsg]));
 
+      // Resetear formulario
       setSpecialOrderForm({
         orderType: 'product',
         products: [{ name: '', description: '', equipmentType: '', characteristics: {}, quantity: 1 }],
-        services: [{ serviceType: '', description: '', scope: '', requirements: '', quantity: 1 }],
+        services: [{ 
+          serviceType: '', 
+          description: '', 
+          scope: '', 
+          requirements: '',
+          quantity: 1,
+          participants: '',
+          days: '',
+          startDate: '',
+          modality: '',
+          locationType: '',
+          location: '',
+          equipmentType: '',
+          equipmentQuantity: '',
+          softwareType: '',
+          areaType: '',
+          area: '',
+          equipment: []
+        }],
         currency: 'CUP',
         projectId: ''
       });
 
-      // Limpiar el estado de edición
       setEditingOrderId(null);
 
       addNotification({
         title: 'Pedido extra enviado',
-        message: `Tu pedido extra de ${specialOrderForm.orderType === 'product' ? 'producto' : 'servicio'} ha sido enviado y está pendiente de aprobación`,
+        message: `Tu pedido extra ha sido enviado y está pendiente de aprobación`,
         type: 'success'
       });
 
@@ -1788,27 +2050,22 @@ const preloadCommonImages = () => {
     }
   };
 
-  // Función para eliminar pedido mejorada - NO elimina pedidos relacionados no seleccionados
   const handleDeleteOrder = (orderId, isSpecial = false) => {
     if (window.confirm('¿Está seguro de eliminar este pedido?')) {
       try {
         if (isSpecial) {
-          // Solo eliminar el pedido específico, no todos los relacionados
           const updated = specialOrders.filter(order => order.id !== orderId);
           setSpecialOrders(updated);
           localStorage.setItem('OASiS_special_orders', JSON.stringify(updated));
         } else {
-          // Para pedidos normales, verificar si es un pedido separado
           const isSeparatedOrder = orderId && typeof orderId === 'string' && 
                                   (orderId.includes('-products') || orderId.includes('-services'));
           
           if (isSeparatedOrder) {
-            // Solo eliminar este pedido específico separado
             const updated = purchases.filter(order => order.id !== orderId);
             setPurchases(updated);
             localStorage.setItem('OASiS_purchases', JSON.stringify(updated));
           } else {
-            // Si es un pedido original conjunto, eliminar TODOS los pedidos relacionados
             const baseOrderId = orderId.toString();
             const updated = purchases.filter(order => {
               if (typeof order.id === 'string' && order.id.includes('-')) {
@@ -1838,8 +2095,17 @@ const preloadCommonImages = () => {
     }
   };
 
-  // Función para editar pedido - maneja correctamente la edición sin duplicar
   const handleEditOrder = (order) => {
+    // Ocultar edición para comercial y gestor en historial
+    if (viewMode === 'history' && ['comercial', 'gestor'].includes(currentUser?.role)) {
+      addNotification({
+        title: 'Acción no permitida',
+        message: 'No puedes editar pedidos en la vista de historial',
+        type: 'error'
+      });
+      return;
+    }
+
     if (order.userId !== currentUser.id && currentUser.role !== 'admin') {
       addNotification({
         title: 'Acceso denegado',
@@ -1849,9 +2115,18 @@ const preloadCommonImages = () => {
       return;
     }
 
+    // Verificar si el pedido está en proceso
+    if (order.status === 'En proceso') {
+      addNotification({
+        title: 'Pedido en proceso',
+        message: 'No se puede editar un pedido que está en proceso',
+        type: 'warning'
+      });
+      return;
+    }
+
     if (window.confirm('¿Está seguro de editar este pedido?')) {
       if (order.type === 'special') {
-        // Lógica para pedidos extra
         const productsData = order.items && order.items.length > 0 
           ? order.items.filter(item => item.type === 'product').map(item => ({
               name: item.name || '',
@@ -1868,9 +2143,39 @@ const preloadCommonImages = () => {
               description: item.description || '',
               scope: item.scope || '',
               requirements: item.requirements || '',
-              quantity: item.quantity || 1
+              quantity: item.quantity || 1,
+              participants: item.participants || '',
+              days: item.days || '',
+              startDate: item.startDate || '',
+              modality: item.modality || '',
+              locationType: item.locationType || '',
+              location: item.location || '',
+              equipmentType: item.equipmentType || '',
+              equipmentQuantity: item.equipmentQuantity || '',
+              softwareType: item.softwareType || '',
+              areaType: item.areaType || '',
+              area: item.area || '',
+              equipment: item.equipment || []
             }))
-          : [{ serviceType: '', description: '', scope: '', requirements: '', quantity: 1 }];
+          : [{ 
+              serviceType: '', 
+              description: '', 
+              scope: '', 
+              requirements: '',
+              quantity: 1,
+              participants: '',
+              days: '',
+              startDate: '',
+              modality: '',
+              locationType: '',
+              location: '',
+              equipmentType: '',
+              equipmentQuantity: '',
+              softwareType: '',
+              areaType: '',
+              area: '',
+              equipment: []
+            }];
 
         setSpecialOrderForm({
           orderType: order.orderType || 'product',
@@ -1880,7 +2185,6 @@ const preloadCommonImages = () => {
           projectId: order.projectId || ''
         });
 
-        // Guardar el ID del pedido que se está editando
         setEditingOrderId(order.id);
         
         setViewMode('special-orders');
@@ -1891,10 +2195,8 @@ const preloadCommonImages = () => {
           type: 'info'
         });
       } else {
-        // Para pedidos normales - guardar el ID del pedido que se está editando
         setEditingOrderId(order.id);
 
-        // Cargar items en el carrito
         const cartItems = order.items.map(item => ({
           ...item,
           quantity: item.quantity,
@@ -1914,16 +2216,97 @@ const preloadCommonImages = () => {
     }
   };
 
-  // Función para ver detalles del pedido
   const handleViewOrderDetails = (order) => {
     setOrderDetailsDialog(order);
   };
 
-  // Filtrar productos basado en disponibilidad y contrato activo
+  // Función para visitar tienda online
+  const visitWebsite = (url) => {
+    if (!url) return;
+    const fullUrl = url.startsWith('http') ? url : `https://${url}`;
+    window.open(fullUrl, '_blank', 'noopener,noreferrer');
+  };
+
+  // Componente para tarjeta de empresa cuando no hay productos de scraping
+  const CompanyCard = ({ companyData }) => {
+    return (
+      <Card sx={{ 
+        height: '100%', 
+        display: 'flex', 
+        flexDirection: 'column',
+        borderRadius: 2,
+        boxShadow: 1,
+        backgroundColor: colors.paper,
+        transition: 'all 0.2s ease',
+        border: `1px solid ${colors.border}`,
+        '&:hover': {
+          transform: 'translateY(-2px)',
+          boxShadow: 2,
+          borderColor: colors.primary
+        }
+      }}>
+        <CardContent sx={{ flexGrow: 1, position: 'relative' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+            <Avatar
+              src={companyData.companyImage}
+              sx={{ 
+                width: 60, 
+                height: 60,
+                backgroundColor: colors.primary
+              }}
+            >
+              {companyData.company?.charAt(0)}
+            </Avatar>
+            <Box>
+              <Typography variant="h6" sx={{ color: colors.primary, fontWeight: 'bold' }}>
+                {companyData.company}
+              </Typography>
+              <Typography variant="body2" sx={{ color: colors.textSecondary }}>
+                {companyData.businessType} • {companyData.supplier}
+              </Typography>
+            </Box>
+          </Box>
+          
+          <Typography variant="body2" sx={{ color: colors.text, mb: 2 }}>
+            Esta empresa tiene una tienda online pero no se pudieron extraer los productos automáticamente.
+          </Typography>
+          
+          {companyData.website && (
+            <>
+              <WebsitePreview 
+                websiteUrl={companyData.website}
+                companyName={companyData.company}
+              />
+              
+              <Button
+                variant="contained"
+                fullWidth
+                startIcon={<LanguageIcon />}
+                onClick={() => visitWebsite(companyData.website)}
+                sx={{ 
+                  mt: 2,
+                  backgroundColor: colors.primary,
+                  '&:hover': { backgroundColor: colors.secondary }
+                }}
+              >
+                Visitar Tienda Online
+              </Button>
+            </>
+          )}
+        </CardContent>
+      </Card>
+    );
+  };
+
+  // Filtrar productos con búsqueda mejorada
   const filteredProducts = useMemo(() => {
     return allProducts.filter(p => {
-      const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                            p.model.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesSearch = 
+        p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        p.model.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        p.company.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (p.category && p.category.toLowerCase().includes(searchTerm.toLowerCase()));
+      
       const matchesCompany = selectedCompany === 'all' || p.company === selectedCompany;
       const matchesCategory = selectedCategory === 'all' || p.category === selectedCategory;
       const matchesPrice = () => {
@@ -1937,7 +2320,6 @@ const preloadCommonImages = () => {
         }
       };
       
-      // Verificar contrato activo de la empresa
       const companyCatalog = catalogs.find(c => 
         c.company === p.company && c.dataType === 'products'
       );
@@ -1947,11 +2329,13 @@ const preloadCommonImages = () => {
     });
   }, [allProducts, searchTerm, selectedCompany, selectedCategory, priceRange, catalogs]);
 
-  // Filtrar servicios basado en contrato activo
   const filteredServices = useMemo(() => {
     return allServices.filter(s => {
-      const matchesSearch = s.service.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                             s.company.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesSearch = 
+        s.service.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        s.company.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (s.type && s.type.toLowerCase().includes(searchTerm.toLowerCase()));
+      
       const matchesPrice = () => {
         const price = s.price;
         switch (priceRange) {
@@ -1963,7 +2347,6 @@ const preloadCommonImages = () => {
         }
       };
       
-      // Verificar contrato activo de la empresa
       const companyCatalog = catalogs.find(c => 
         c.company === s.company && c.dataType === 'services'
       );
@@ -1973,12 +2356,10 @@ const preloadCommonImages = () => {
     });
   }, [allServices, searchTerm, priceRange, catalogs]);
 
-  // Filtrar historial con ordenamiento por defecto (más reciente primero)
   const filteredPurchases = useMemo(() => {
     const allOrders = [...purchases, ...specialOrders];
     const separatedOrders = processPurchasesForHistory(allOrders);
     
-    // Ordenar según la selección
     const sortedOrders = separatedOrders.sort((a, b) => {
       const dateA = new Date(a.date);
       const dateB = new Date(b.date);
@@ -1999,7 +2380,6 @@ const preloadCommonImages = () => {
     });
   }, [purchases, specialOrders, searchTerm, selectedUser, currentUser, sortOrder]);
 
-  // CORREGIDO: Resetear el formulario correctamente al cerrar
   const handleCancelEdit = () => {
     setUploadModal(false);
     setEditMode(false);
@@ -2009,13 +2389,16 @@ const preloadCommonImages = () => {
       id: null, 
       supplier: '', 
       company: '', 
-      businessType: '', 
+      businessType: '',
+      website: '',
       dataType: 'both',
       companyImage: null,
       currency: 'CUP',
       contractActive: false,
       productsCount: 0,
-      servicesCount: 0
+      servicesCount: 0,
+      scrapingStatus: 'not_started',
+      scrapedProducts: []
     });
   };
 
@@ -2025,24 +2408,29 @@ const preloadCommonImages = () => {
       flexDirection: 'column',
       height: '100vh',
       overflow: 'hidden',
-      backgroundColor: colors.paper,
+      backgroundColor: colors.background,
       color: colors.text,
       transition: 'all 0.3s ease',
     }}>
       {/* Título */}
+      <Box sx={{ 
+        px: 3,
+        py: 6,
+        backgroundColor: colors.paper,
+        borderBottom: `1px solid ${colors.border}`
+      }}>
         <Typography 
           variant="h4" 
           component="h1" 
           sx={{ 
-            mb: 2, 
-            textAlign: 'center',
-            color: colors.borgundy,
+            color: colors.primary,
             fontWeight: 'bold',
-            marginTop: '40px',
+            textAlign: 'center',
           }}
         >
           Gestión de Pedidos
         </Typography>
+      </Box>
 
       {/* Navbar estático fijo */}
       <Box sx={{ 
@@ -2054,7 +2442,7 @@ const preloadCommonImages = () => {
         right: 0,
         zIndex: 1000,
         backgroundColor: colors.paper,
-        borderBottom: `2px solid ${colors.shellstone}`,
+        borderBottom: `1px solid ${colors.border}`,
       }}>
         <AppBar 
           position="static" 
@@ -2066,8 +2454,6 @@ const preloadCommonImages = () => {
           }}
         >
           <Toolbar>
-
-            {/* Pestañas existentes */}
             <Tabs
               value={viewMode}
               onChange={(_, newValue) => setViewMode(newValue)}
@@ -2080,22 +2466,19 @@ const preloadCommonImages = () => {
                   minWidth: 120,
                   fontWeight: 'bold',
                   textTransform: 'none',
-                  color: colors.sapphire,
+                  color: colors.textSecondary,
                   '&.Mui-selected': { 
-                    color: colors.borgundy, 
-                    backgroundColor: 'rgba(2, 33, 71, 0.1)', 
+                    color: colors.primary, 
+                    backgroundColor: colors.border, 
                     borderRadius: '8px 8px 0 0',
-                    borderTop: `2px solid ${colors.borgundy}`,
-                    borderLeft: `2px solid ${colors.borgundy}`,
-                    borderRight: `2px solid ${colors.borgundy}`
                   },
                   '&:hover': { 
-                    color: colors.borgundy,
-                    backgroundColor: 'rgba(210, 180, 140, 0.1)'
+                    color: colors.primary,
+                    backgroundColor: colors.border
                   }
                 },
                 '& .MuiTabs-indicator': { 
-                  backgroundColor: colors.borgundy, 
+                  backgroundColor: colors.primary, 
                   height: 3 
                 }
               }}
@@ -2107,15 +2490,14 @@ const preloadCommonImages = () => {
               {currentUser?.role === 'admin' && <Tab value="companies" label="Empresas" icon={<BusinessIcon />} />}
             </Tabs>
             
-            {/* Carrito */}
             {currentUser?.role !== 'moderator' && (
               <IconButton 
                 color="inherit" 
                 onClick={() => setShowCart(!showCart)}
                 sx={{
-                  color: colors.borgundy,
+                  color: colors.primary,
                   '&:hover': {
-                    backgroundColor: 'rgba(210, 180, 140, 0.2)'
+                    backgroundColor: colors.border
                   }
                 }}
               >
@@ -2142,27 +2524,27 @@ const preloadCommonImages = () => {
           backgroundColor: colors.paper,
         },
         '&::-webkit-scrollbar-thumb': {
-          backgroundColor: colors.shellstone,
+          backgroundColor: colors.border,
           borderRadius: '4px',
         },
         '&::-webkit-scrollbar-thumb:hover': {
-          backgroundColor: colors.borgundy,
+          backgroundColor: colors.primary,
         }
       }}>
 
-        {/* Vista de Productos - CORREGIDA: mostrar solo productos de empresas con contrato activo */}
+        {/* Vista de Productos - MODIFICADA */}
         {viewMode === 'products' && (
-          <Box sx={{ backgroundColor: colors.paper }}>
-            {/* Filtros */}
+          <Box sx={{ backgroundColor: colors.paper, p: 3, borderRadius: 2 }}>
+            {/* Filtros mejorados */}
             <Box sx={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 2, mb: 3 }}>
               <TextField
-                placeholder="Buscar por nombre o modelo..."
+                placeholder="Buscar por nombre, modelo, empresa o categoría..."
                 variant="outlined"
                 size="small"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 InputProps={{
-                  startAdornment: <SearchIcon color= "actions" />,
+                  startAdornment: <SearchIcon sx={{ color: colors.textSecondary }} />,
                 }}
                 fullWidth
                 sx={{
@@ -2170,10 +2552,10 @@ const preloadCommonImages = () => {
                   '& .MuiOutlinedInput-root': {
                     color: colors.text,
                     '& fieldset': {
-                      borderColor: colors.shellstone,
+                      borderColor: colors.border,
                     },
                     '&:hover fieldset': {
-                      borderColor: colors.tan,
+                      borderColor: colors.primary,
                     },
                   }
                 }}
@@ -2188,7 +2570,7 @@ const preloadCommonImages = () => {
                     backgroundColor: colors.paper,
                     color: colors.text,
                     '&:hover .MuiOutlinedInput-notchedOutline': {
-                      borderColor: colors.borgundy,
+                      borderColor: colors.primary,
                     }
                   }}
                 >
@@ -2208,7 +2590,7 @@ const preloadCommonImages = () => {
                     backgroundColor: colors.paper,
                     color: colors.text,
                     '&:hover .MuiOutlinedInput-notchedOutline': {
-                      borderColor: colors.borgundy,
+                      borderColor: colors.primary,
                     }
                   }}
                 >
@@ -2219,13 +2601,15 @@ const preloadCommonImages = () => {
                 </Select>
               </FormControl>
             </Box>
+            
+            {/* Productos */}
             <Grid container spacing={2}>
               {filteredProducts.length === 0 ? (
                 <Grid item xs={12}>
                   <Alert severity="info" sx={{ backgroundColor: colors.paper, color: colors.text }}>
                     {searchTerm || selectedCompany !== 'all' || selectedCategory !== 'all' || priceRange !== 'all'
                       ? 'No se encontraron productos que coincidan con los filtros.'
-                      : 'No hay productos disponibles. Contacte al administrador.'}
+                      : 'No hay productos disponibles.'}
                   </Alert>
                 </Grid>
               ) : (
@@ -2235,6 +2619,7 @@ const preloadCommonImages = () => {
                   );
                   const isCompanyActive = companyCatalog ? companyCatalog.contractActive : false;
                   const isOutOfStock = product.stock <= 0 || product.availability === 'Agotado';
+                  const isScrapedProduct = product.fromWebsite;
                   
                   return (
                     <Grid item xs={12} sm={6} md={4} key={product.id}>
@@ -2244,19 +2629,39 @@ const preloadCommonImages = () => {
                         display: 'flex', 
                         flexDirection: 'column',
                         borderRadius: 2,
-                        boxShadow: 3,
+                        boxShadow: 1,
                         overflow: 'hidden',
-                        backgroundColor: 'transparent',
-                        transition: 'all 0.3s ease',
+                        backgroundColor: colors.paper,
+                        transition: 'all 0.2s ease',
                         opacity: isOutOfStock ? 0.7 : 1,
-                        border: `1px solid ${colors.shellstone}`,
+                        border: `1px solid ${colors.border}`,
                         '&:hover': {
-                          transform: 'translateY(-5px)',
-                          boxShadow: 6,
-                          borderColor: colors.borgundy
+                          transform: 'translateY(-2px)',
+                          boxShadow: 2,
+                          borderColor: colors.primary
                         }
                       }}>
-                        {/* Contenedor de imagen - MÁS GRANDE */}
+                        {/* Badge para productos de scraping */}
+                        {isScrapedProduct && (
+                          <Box sx={{ 
+                            position: 'absolute', 
+                            top: 8, 
+                            left: 8, 
+                            zIndex: 1 
+                          }}>
+                            <Chip
+                              label="Online"
+                              size="small"
+                              sx={{ 
+                                backgroundColor: colors.info,
+                                color: 'white',
+                                fontSize: '0.6rem'
+                              }}
+                            />
+                          </Box>
+                        )}
+                        
+                        {/* Contenedor de imagen */}
                         <Box sx={{ 
                           position: 'relative',
                           height: 180, 
@@ -2296,47 +2701,16 @@ const preloadCommonImages = () => {
                                 top: 4,
                                 right: 4,
                                 fontWeight: 'bold',
-                                backgroundColor: isOutOfStock ? 'grey' : colors.borgundy,
+                                backgroundColor: isOutOfStock ? 'grey' : colors.primary,
                                 color: 'white',
                                 fontSize: '0.75rem',
                                 height: '24px'
                               }}
                             />
-
-                            {isOutOfStock && (
-                              <Box
-                                sx={{
-                                  position: 'absolute',
-                                  top: 0,
-                                  left: 0,
-                                  right: 0,
-                                  bottom: 0,
-                                  backgroundColor: 'rgba(0, 0, 0, 0.5)',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  zIndex: 1
-                                }}
-                              >
-                                <Typography 
-                                  variant="h6" 
-                                  sx={{ 
-                                    color: 'white', 
-                                    textAlign: 'center',
-                                    p: 1,
-                                    backgroundColor: 'rgba(0,0,0,0.7)',
-                                    borderRadius: 1,
-                                    fontSize: '0.9rem'
-                                  }}
-                                >
-                                  Agotado
-                                </Typography>
-                              </Box>
-                            )}
                           </Box>
                         </Box>
 
-                        {/* Contenido de la tarjeta  */}
+                        {/* Contenido de la tarjeta */}
                         <CardContent sx={{ 
                           flex: '1 0 auto',
                           p: 1.5, 
@@ -2345,7 +2719,6 @@ const preloadCommonImages = () => {
                           justifyContent: 'space-between',
                           minHeight: '150px' 
                         }}>
-                          {/* Nombre del producto y botón de carrito */}
                           <Box sx={{ 
                             display: 'flex', 
                             justifyContent: 'space-between', 
@@ -2358,7 +2731,7 @@ const preloadCommonImages = () => {
                               fontWeight="bold" 
                               sx={{ 
                                 flexGrow: 1, 
-                                color: isOutOfStock ? 'text.disabled' : colors.borgundy,
+                                color: isOutOfStock ? 'text.disabled' : colors.text,
                                 fontSize: '1rem', 
                                 lineHeight: 1.2,
                                 height: '2.4em', 
@@ -2376,14 +2749,9 @@ const preloadCommonImages = () => {
                               onClick={() => addToCart(product)}
                               disabled={isOutOfStock}
                               sx={{ 
-                                color: isOutOfStock ? 'grey' : colors.borgundy,
+                                color: isOutOfStock ? 'grey' : colors.primary,
                                 '&:hover': { 
-                                  backgroundColor: isOutOfStock ? 'inherit' : 'rgba(78, 1, 1, 0.1)', 
-                                  color: isOutOfStock ? 'grey' : colors.borgundy,
-                                },
-                                '&.Mui-disabled': { 
-                                  color: 'rgba(0, 0, 0, 0.26)',
-                                  backgroundColor: 'transparent' 
+                                  backgroundColor: 'rgba(78, 1, 1, 0.1)', 
                                 },
                                 padding: '4px',
                                 marginTop: '-4px' 
@@ -2427,21 +2795,6 @@ const preloadCommonImages = () => {
                               <span style={{ flex: 1 }}>
                                 {product.stock}
                               </span>
-                              {isOutOfStock && (
-                                <Chip 
-                                  label="Agotado" 
-                                  size="small" 
-                                  color="error" 
-                                  sx={{ 
-                                    ml: 0.5, 
-                                    height: 16, 
-                                    fontSize: '0.55rem',
-                                    '& .MuiChip-label': {
-                                      px: 0.5
-                                    }
-                                  }} 
-                                />
-                              )}
                             </Typography>
                             
                             <Typography variant="body2" color={isOutOfStock ? 'text.disabled' : colors.textSecondary} 
@@ -2464,9 +2817,7 @@ const preloadCommonImages = () => {
                         </CardContent>
                         
                         {/* Botón Ver Detalles */}
-                        <CardActions sx={{ 
-                          p: 1, pt: 0 
-                        }}>
+                        <CardActions sx={{ p: 1, pt: 0 }}>
                           <Button
                             fullWidth
                             size="small"
@@ -2474,12 +2825,11 @@ const preloadCommonImages = () => {
                             onClick={() => openProductDialog(product)}
                             sx={{
                               top: -18,
-                              color: isOutOfStock ? 'grey' : colors.borgundy,
+                              color: isOutOfStock ? 'grey' : colors.primary,
                               fontSize: '0.8rem',
                               fontWeight: 'bold',
                               '&:hover': { 
-                                backgroundColor: isOutOfStock ? 'inherit' : 'rgba(210, 180, 140, 0.2)', 
-                                color: colors.borgundy,
+                                backgroundColor: 'rgba(210, 180, 140, 0.2)', 
                               },
                             }}
                           >
@@ -2495,9 +2845,9 @@ const preloadCommonImages = () => {
           </Box>
         )}
 
-        {/* Vista de Servicios - CORREGIDA: mostrar solo servicios de empresas con contrato activo */}
+        {/* Vista de Servicios */}
         {viewMode === 'services' && (
-          <Box sx={{ backgroundColor: colors.paper }}>
+          <Box sx={{ backgroundColor: colors.paper, p: 3, borderRadius: 2 }}>
             <Box sx={{ 
               display: 'flex', 
               flexDirection: isMobile ? 'column' : 'row', 
@@ -2511,7 +2861,7 @@ const preloadCommonImages = () => {
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 InputProps={{
-                  startAdornment: <SearchIcon color="actions" />,
+                  startAdornment: <SearchIcon sx={{ color: colors.textSecondary }} />,
                 }}
                 fullWidth
                 sx={{
@@ -2519,10 +2869,10 @@ const preloadCommonImages = () => {
                   '& .MuiOutlinedInput-root': {
                     color: colors.text,
                     '& fieldset': {
-                      borderColor: colors.shellstone,
+                      borderColor: colors.border,
                     },
                     '&:hover fieldset': {
-                      borderColor: colors.borgundy,
+                      borderColor: colors.primary,
                     },
                   }
                 }}
@@ -2533,14 +2883,12 @@ const preloadCommonImages = () => {
               {filteredServices.length === 0 ? (
                 <Grid item xs={12}>
                   <Alert severity="info" sx={{ backgroundColor: colors.paper, color: colors.text }}>
-                    {searchTerm || priceRange !== 'all'
-                      ? 'No se encontraron servicios que coincidan con la búsqueda.'
-                      : 'No hay servicios disponibles. Contacte al administrador.'}
+                    No se encontraron servicios que coincidan con la búsqueda.
                   </Alert>
                 </Grid>
               ) : (
                 filteredServices.map((service) => {
-                  const isOutOfStock = false; // Los servicios no tienen stock
+                  const isOutOfStock = false;
                   
                   return (
                     <Grid item xs={12} sm={6} md={4} key={service.id}>
@@ -2550,22 +2898,22 @@ const preloadCommonImages = () => {
                         display: 'flex', 
                         flexDirection: 'column',
                         borderRadius: 2,
-                        boxShadow: 2,
+                        boxShadow: 1,
                         backgroundColor: colors.paper,
                         opacity: isOutOfStock ? 0.7 : 1,
-                        transition: 'all 0.3s ease',
-                        border: `1px solid ${colors.shellstone}`,
+                        transition: 'all 0.2s ease',
+                        border: `1px solid ${colors.border}`,
                         '&:hover': {
-                          transform: 'translateY(-5px)',
-                          boxShadow: 6,
-                          borderColor: colors.borgundy
+                          transform: 'translateY(-2px)',
+                          boxShadow: 2,
+                          borderColor: colors.primary
                         }
                       }}>
                         <CardContent sx={{ flexGrow: 1, position: 'relative' }}>
                           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', mb: 1 }}>
                             <Typography variant="h6" component="div" sx={{ 
                               fontSize: '1.1rem', 
-                              color: isOutOfStock ? 'text.disabled' : colors.borgundy 
+                              color: isOutOfStock ? 'text.disabled' : colors.text 
                             }}>
                               {service.service}
                             </Typography>
@@ -2573,7 +2921,7 @@ const preloadCommonImages = () => {
                               label={service.company}
                               size="small"
                               sx={{ 
-                                backgroundColor: isOutOfStock ? 'grey' : colors.borgundy, 
+                                backgroundColor: isOutOfStock ? 'grey' : colors.primary, 
                                 color: 'white',
                                 fontWeight: 'bold'
                               }}
@@ -2585,14 +2933,8 @@ const preloadCommonImages = () => {
                           <Typography variant="body2" color={isOutOfStock ? 'text.disabled' : colors.textSecondary} sx={{ mb: 1 }}>
                             Duración: {service.duration}
                           </Typography>
-                          <Typography variant="body2" color={isOutOfStock ? 'text.disabled' : colors.textSecondary} sx={{ mb: 1 }}>
-                            Descripción: {service.description}
-                          </Typography>
                           <Typography variant="h6" color={isOutOfStock ? 'text.disabled' : 'error'} sx={{ fontWeight: 'bold', mt: 1 }}>
                             ${service.price} CUP
-                          </Typography>
-                          <Typography variant="body2" color={isOutOfStock ? 'text.disabled' : colors.textSecondary} sx={{ mt: 1, fontStyle: 'italic' }}>
-                            {service.note}
                           </Typography>
                         </CardContent>
                         <CardActions sx={{ justifyContent: 'flex-end' }}>
@@ -2602,8 +2944,8 @@ const preloadCommonImages = () => {
                             onClick={() => addToCart(service)}
                             disabled={isOutOfStock}
                             sx={{ 
-                              backgroundColor: isOutOfStock ? 'grey' : colors.borgundy,
-                              '&:hover': { backgroundColor: isOutOfStock ? 'grey' : colors.sapphire }
+                              backgroundColor: isOutOfStock ? 'grey' : colors.primary,
+                              '&:hover': { backgroundColor: colors.secondary }
                             }}
                           >
                             Solicitar
@@ -2618,34 +2960,23 @@ const preloadCommonImages = () => {
           </Box>
         )}
 
-        {/* Vista de Pedidos Extras - CORREGIDA: agregar campo cantidad */}
+        {/* Vista de Pedidos Extras - ACTUALIZADA con formulario completo */}
         {viewMode === 'special-orders' && (
           <Box sx={{ 
             maxWidth: 1000, 
             margin: '0 auto', 
             width: '100%',
-            backgroundColor: colors.paper
           }}>
             <Paper sx={{ 
               p: 3, 
               borderRadius: 2, 
-              boxShadow: 3,
-              paper: `rgba(${darkMode ? '45, 55, 72' : '245, 240, 233'}, 0.8)`,
-              backdropFilter: 'blur(10px)',
-              border: `1px solid ${colors.shellstone}`,
+              boxShadow: 1,
+              backgroundColor: colors.paper,
+              border: `1px solid ${colors.border}`,
               position: 'relative',
               overflow: 'hidden',
-              '&::before': {
-                content: '""',
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                right: 0,
-                height: '4px',
-                background: `linear-gradient(90deg, ${colors.borgundy}, ${colors.tan})`
-              }
             }}>
-              <Typography variant="h5" align="center" gutterBottom sx={{ mb: 3, color: colors.borgundy, fontWeight: 'bold' }}>
+              <Typography variant="h5" align="center" gutterBottom sx={{ mb: 3, color: colors.primary, fontWeight: 'bold' }}>
                 <AssignmentIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
                 Solicitud de Pedidos Extra
               </Typography>
@@ -2660,13 +2991,31 @@ const preloadCommonImages = () => {
                     ...specialOrderForm, 
                     orderType: e.target.value,
                     products: e.target.value === 'product' ? [{ name: '', description: '', equipmentType: '', characteristics: {}, quantity: 1 }] : [],
-                    services: e.target.value === 'service' ? [{ serviceType: '', description: '', scope: '', requirements: '', quantity: 1 }] : []
+                    services: e.target.value === 'service' ? [{ 
+                      serviceType: '', 
+                      description: '', 
+                      scope: '', 
+                      requirements: '',
+                      quantity: 1,
+                      participants: '',
+                      days: '',
+                      startDate: '',
+                      modality: '',
+                      locationType: '',
+                      location: '',
+                      equipmentType: '',
+                      equipmentQuantity: '',
+                      softwareType: '',
+                      areaType: '',
+                      area: '',
+                      equipment: []
+                    }] : []
                   })}
                   sx={{
-                    backgroundColor: 'transparent',
+                    backgroundColor: colors.paper,
                     color: colors.text,
                     '&:hover .MuiOutlinedInput-notchedOutline': {
-                      borderColor: colors.borgundy,
+                      borderColor: colors.primary,
                     }
                   }}
                 >
@@ -2675,18 +3024,17 @@ const preloadCommonImages = () => {
                 </Select>
               </FormControl>
 
-              {/* Campos para Productos - CORREGIDO: agregar campo cantidad */}
+              {/* Campos para Productos */}
               {specialOrderForm.orderType === 'product' && specialOrderForm.products.map((product, index) => (
                 <Box key={index} sx={{ 
                   mb: 3, 
                   p: 2, 
-                  border: `1px solid ${colors.shellstone}`, 
+                  border: `1px solid ${colors.border}`, 
                   borderRadius: 2,
-                  backgroundColor: 'transparent',
-                  backdropFilter: 'blur(5px)'
+                  backgroundColor: colors.background,
                 }}>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                    <Typography variant="h6" sx={{ color: colors.borgundy }}>
+                    <Typography variant="h6" sx={{ color: colors.primary }}>
                       Producto {index + 1}
                     </Typography>
                     {specialOrderForm.products.length > 1 && (
@@ -2700,7 +3048,6 @@ const preloadCommonImages = () => {
                     )}
                   </Box>
                   
-                  {/* Selector de Tipo de Equipo */}
                   <FormControl fullWidth sx={{ mb: 2 }}>
                     <InputLabel sx={{ color: colors.textSecondary }}>Tipo de Equipo</InputLabel>
                     <Select
@@ -2708,10 +3055,10 @@ const preloadCommonImages = () => {
                       label="Tipo de Equipo"
                       onChange={(e) => handleEquipmentTypeChange(index, e.target.value)}
                       sx={{
-                        backgroundColor: 'transparent',
+                        backgroundColor: colors.paper,
                         color: colors.text,
                         '&:hover .MuiOutlinedInput-notchedOutline': {
-                          borderColor: colors.borgundy,
+                          borderColor: colors.primary,
                         }
                       }}
                     >
@@ -2733,11 +3080,11 @@ const preloadCommonImages = () => {
                       onChange={(e) => handleProductFieldChange(index, 'name', e.target.value)}
                       margin="normal"
                       sx={{
-                        backgroundColor: 'transparent',
+                        backgroundColor: colors.paper,
                         color: colors.text,
                         '& .MuiOutlinedInput-root': {
                           '&:hover fieldset': {
-                            borderColor: colors.borgundy,
+                            borderColor: colors.primary,
                           },
                         }
                       }}
@@ -2746,7 +3093,7 @@ const preloadCommonImages = () => {
 
                   {product.equipmentType && product.equipmentType !== 'other' && (
                     <Box sx={{ mt: 2 }}>
-                      <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold', color: colors.borgundy }}>
+                      <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold', color: colors.primary }}>
                         Características de {EQUIPMENT_CONFIG[product.equipmentType]?.name}
                       </Typography>
                       
@@ -2760,10 +3107,10 @@ const preloadCommonImages = () => {
                                 label={charConfig.label}
                                 onChange={(e) => handleCharacteristicChange(index, charKey, e.target.value)}
                                 sx={{
-                                  backgroundColor: 'transparent',
+                                  backgroundColor: colors.paper,
                                   color: colors.text,
                                   '&:hover .MuiOutlinedInput-notchedOutline': {
-                                    borderColor: colors.borgundy,
+                                    borderColor: colors.primary,
                                   }
                                 }}
                               >
@@ -2776,52 +3123,9 @@ const preloadCommonImages = () => {
                               </Select>
                             </FormControl>
                           )}
-                          
-                          {charConfig.type === 'multiselect' && (
-                            <Accordion sx={{ mb: 1, border: `1px solid ${colors.shellstone}`, backgroundColor: 'transparent' }}>
-                              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                                <Typography sx={{ color: colors.borgundy }}>{charConfig.label}</Typography>
-                              </AccordionSummary>
-                              <AccordionDetails>
-                                <FormGroup>
-                                  {charConfig.options.map(option => (
-                                    <FormControlLabel
-                                      key={option.value}
-                                      control={
-                                        <Checkbox
-                                          checked={Array.isArray(product.characteristics[charKey]) && 
-                                                  product.characteristics[charKey].includes(option.value)}
-                                          onChange={(e) => {
-                                            const currentValues = Array.isArray(product.characteristics[charKey]) 
-                                              ? product.characteristics[charKey] 
-                                              : [];
-                                            let newValues;
-                                            if (e.target.checked) {
-                                              newValues = [...currentValues, option.value];
-                                            } else {
-                                              newValues = currentValues.filter(val => val !== option.value);
-                                            }
-                                            handleCharacteristicChange(index, charKey, newValues);
-                                          }}
-                                          sx={{
-                                            color: colors.borgundy,
-                                            '&.Mui-checked': {
-                                              color: colors.borgundy,
-                                            },
-                                          }}
-                                        />
-                                      }
-                                      label={option.label}
-                                    />
-                                  ))}
-                                </FormGroup>
-                              </AccordionDetails>
-                            </Accordion>
-                          )}
                         </Box>
                       ))}
                       
-                      {/* Campo cantidad para productos */}
                       <TextField
                         label="Cantidad"
                         type="number"
@@ -2831,32 +3135,15 @@ const preloadCommonImages = () => {
                         margin="normal"
                         inputProps={{ min: 1 }}
                         sx={{
-                          backgroundColor: 'transparent',
+                          backgroundColor: colors.paper,
                           color: colors.text,
                           '& .MuiOutlinedInput-root': {
                             '&:hover fieldset': {
-                              borderColor: colors.borgundy,
+                              borderColor: colors.primary,
                             },
                           }
                         }}
                       />
-
-                      <Button
-                        variant="outlined"
-                        onClick={() => handleGenerateDescription(index)}
-                        disabled={!product.equipmentType || Object.keys(product.characteristics).length === 0}
-                        sx={{ 
-                          mb: 2,
-                          borderColor: colors.borgundy,
-                          color: colors.borgundy,
-                          '&:hover': {
-                            borderColor: colors.sapphire,
-                            backgroundColor: 'rgba(2, 33, 71, 0.04)'
-                          }
-                        }}
-                      >
-                        Generar Descripción Automática
-                      </Button>
                     </Box>
                   )}
                   
@@ -2868,14 +3155,12 @@ const preloadCommonImages = () => {
                     value={product.description}
                     onChange={(e) => handleProductFieldChange(index, 'description', e.target.value)}
                     margin="normal"
-                    inputProps={{ maxLength: 500 }}
-                    helperText={`${product.description.length}/500 caracteres`}
                     sx={{
-                      backgroundColor: 'transparent',                      
+                      backgroundColor: colors.paper,                      
                       color: colors.text,
                       '& .MuiOutlinedInput-root': {
                         '&:hover fieldset': {
-                          borderColor: colors.borgundy,
+                          borderColor: colors.primary,
                         },
                       }
                     }}
@@ -2883,18 +3168,38 @@ const preloadCommonImages = () => {
                 </Box>
               ))}
               
-              {/* Campos para Servicios - CORREGIDO: agregar campo cantidad */}
+              {/* Botón para añadir producto */}
+              {specialOrderForm.orderType === 'product' && (
+                <Button
+                  variant="outlined"
+                  startIcon={<AddIcon />}
+                  onClick={handleAddProductField}
+                  fullWidth
+                  sx={{ 
+                    mb: 3,
+                    borderColor: colors.primary,
+                    color: colors.primary,
+                    '&:hover': {
+                      borderColor: colors.secondary,
+                      backgroundColor: colors.border
+                    }
+                  }}
+                >
+                  Añadir otro producto
+                </Button>
+              )}
+              
+              {/* Campos para Servicios - ACTUALIZADO con todos los campos */}
               {specialOrderForm.orderType === 'service' && specialOrderForm.services.map((service, index) => (
                 <Box key={index} sx={{ 
                   mb: 3, 
                   p: 2, 
-                  border: `1px solid ${colors.shellstone}`, 
+                  border: `1px solid ${colors.border}`, 
                   borderRadius: 2,
-                  backgroundColor: 'transparent',
-                  backdropFilter: 'blur(5px)'
+                  backgroundColor: colors.background,
                 }}>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                    <Typography variant="h6" sx={{ color: colors.borgundy }}>
+                    <Typography variant="h6" sx={{ color: colors.primary }}>
                       Servicio {index + 1}
                     </Typography>
                     {specialOrderForm.services.length > 1 && (
@@ -2915,65 +3220,358 @@ const preloadCommonImages = () => {
                       label="Tipo de Servicio"
                       onChange={(e) => handleServiceFieldChange(index, 'serviceType', e.target.value)}
                       sx={{
-                        backgroundColor: 'transparent',
+                        backgroundColor: colors.paper,
                         color: colors.text,
                         '&:hover .MuiOutlinedInput-notchedOutline': {
-                          borderColor: colors.borgundy,
+                          borderColor: colors.primary,
                         }
                       }}
                     >
                       <MenuItem value="">Seleccionar tipo de servicio</MenuItem>
-                      <MenuItem value="software">Desarrollo de Software</MenuItem>
-                      <MenuItem value="hardware">Instalación de Hardware</MenuItem>
-                      <MenuItem value="consulting">Consultoría TI</MenuItem>
-                      <MenuItem value="maintenance">Mantenimiento</MenuItem>
-                      <MenuItem value="training">Capacitación</MenuItem>
-                      <MenuItem value="networking">Redes y Comunicaciones</MenuItem>
-                      <MenuItem value="security">Ciberseguridad</MenuItem>
-                      <MenuItem value="cloud">Servicios en la Nube</MenuItem>
-                      <MenuItem value="other">Otro Servicio</MenuItem>
+                      {serviceTypes.map(type => (
+                        <MenuItem key={type} value={type}>{type}</MenuItem>
+                      ))}
                     </Select>
                   </FormControl>
 
-                  <TextField
-                    label="Alcance del Servicio"
-                    fullWidth
-                    multiline
-                    rows={2}
-                    value={service.scope}
-                    onChange={(e) => handleServiceFieldChange(index, 'scope', e.target.value)}
-                    margin="normal"
-                    placeholder="Describa el alcance y objetivos del servicio..."
-                    sx={{
-                      backgroundColor: 'transparent',
-                      color: colors.text,
-                      '& .MuiOutlinedInput-root': {
-                        '&:hover fieldset': {
-                          borderColor: colors.borgundy,
-                        },
-                      }
-                    }}
-                  />
-                  
-                  <TextField
-                    label="Requisitos Específicos"
-                    fullWidth
-                    multiline
-                    rows={2}
-                    value={service.requirements}
-                    onChange={(e) => handleServiceFieldChange(index, 'requirements', e.target.value)}
-                    margin="normal"
-                    placeholder="Especifique requisitos técnicos, hardware, software, etc."
-                    sx={{
-                      backgroundColor: 'transparent',
-                      color: colors.text,
-                      '& .MuiOutlinedInput-root': {
-                        '&:hover fieldset': {
-                          borderColor: colors.borgundy,
-                        },
-                      }
-                    }}
-                  />
+                  {/* Campos específicos según tipo de servicio */}
+                  {service.serviceType && (
+                    <Box sx={{ mt: 2 }}>
+                      {['Capacitación', 'Consultoría'].includes(service.serviceType) && (
+                        <Grid container spacing={2}>
+                          <Grid item xs={12} sm={6}>
+                            <TextField
+                              label="Cantidad de personas"
+                              fullWidth
+                              type="number"
+                              value={service.participants}
+                              onChange={(e) => handleServiceFieldChange(index, 'participants', e.target.value)}
+                              margin="normal"
+                              size="small"
+                              sx={{
+                                '& .MuiOutlinedInput-root': {
+                                  color: colors.text,
+                                  '& fieldset': {
+                                    borderColor: colors.border,
+                                  },
+                                }
+                              }}
+                            />
+                          </Grid>
+                          <Grid item xs={12} sm={6}>
+                            <TextField
+                              label="Cantidad de días"
+                              fullWidth
+                              type="number"
+                              value={service.days}
+                              onChange={(e) => handleServiceFieldChange(index, 'days', e.target.value)}
+                              margin="normal"
+                              size="small"
+                              sx={{
+                                '& .MuiOutlinedInput-root': {
+                                  color: colors.text,
+                                  '& fieldset': {
+                                    borderColor: colors.border,
+                                  },
+                                }
+                              }}
+                            />
+                          </Grid>
+                          <Grid item xs={12} sm={6}>
+                            <TextField
+                              label="Fecha de inicio"
+                              fullWidth
+                              type="date"
+                              value={service.startDate}
+                              onChange={(e) => handleServiceFieldChange(index, 'startDate', e.target.value)}
+                              margin="normal"
+                              size="small"
+                              InputLabelProps={{ shrink: true }}
+                              sx={{
+                                '& .MuiOutlinedInput-root': {
+                                  color: colors.text,
+                                  '& fieldset': {
+                                    borderColor: colors.border,
+                                  },
+                                }
+                              }}
+                            />
+                          </Grid>
+                          <Grid item xs={12} sm={6}>
+                            <FormControl fullWidth margin="normal" size="small">
+                              <InputLabel>Modalidad</InputLabel>
+                              <Select
+                                value={service.modality}
+                                onChange={(e) => handleServiceFieldChange(index, 'modality', e.target.value)}
+                                label="Modalidad"
+                                sx={{
+                                  color: colors.text,
+                                  backgroundColor: colors.paper,
+                                  '& .MuiOutlinedInput-notchedOutline': {
+                                    borderColor: colors.border,
+                                  }
+                                }}
+                              >
+                                <MenuItem value="">Seleccionar</MenuItem>
+                                {modalityOptions.map(modality => (
+                                  <MenuItem key={modality} value={modality}>{modality}</MenuItem>
+                                ))}
+                              </Select>
+                            </FormControl>
+                          </Grid>
+                          
+                          {/* Mostrar opciones de equipamiento para modalidad Online */}
+                          {service.modality === 'Online' && (
+                            <Grid item xs={12}>
+                              <Box sx={{ mt: 2, p: 2, backgroundColor: colors.paper, borderRadius: 1 }}>
+                                <Typography variant="subtitle2" sx={{ color: colors.text, mb: 2, fontWeight: 'bold' }}>
+                                  Equipamiento para modalidad Online
+                                </Typography>
+                                <Grid container spacing={2}>
+                                  <Grid item xs={12} sm={3}>
+                                    <FormControlLabel
+                                      control={
+                                        <Checkbox
+                                          checked={service.equipment?.includes('plataforma-evea')}
+                                          onChange={(e) => handleEquipmentChange(index, 'plataforma-evea', e.target.checked)}
+                                        />
+                                      }
+                                      label="Plataforma EVEA"
+                                      sx={{ color: colors.text }}
+                                    />
+                                  </Grid>
+                                  <Grid item xs={12} sm={3}>
+                                    <FormControlLabel
+                                      control={
+                                        <Checkbox
+                                          checked={service.equipment?.includes('camara')}
+                                          onChange={(e) => handleEquipmentChange(index, 'camara', e.target.checked)}
+                                        />
+                                      }
+                                      label="Cámara"
+                                      sx={{ color: colors.text }}
+                                    />
+                                  </Grid>
+                                  <Grid item xs={12} sm={3}>
+                                    <FormControlLabel
+                                      control={
+                                        <Checkbox
+                                          checked={service.equipment?.includes('microfono')}
+                                          onChange={(e) => handleEquipmentChange(index, 'microfono', e.target.checked)}
+                                        />
+                                      }
+                                      label="Micrófono"
+                                      sx={{ color: colors.text }}
+                                    />
+                                  </Grid>
+                                  <Grid item xs={12} sm={3}>
+                                    <FormControlLabel
+                                      control={
+                                        <Checkbox
+                                          checked={service.equipment?.includes('salon-virtual')}
+                                          onChange={(e) => handleEquipmentChange(index, 'salon-virtual', e.target.checked)}
+                                        />
+                                      }
+                                      label="Salón virtual"
+                                      sx={{ color: colors.text }}
+                                    />
+                                  </Grid>
+                                </Grid>
+                              </Box>
+                            </Grid>
+                          )}
+                        </Grid>
+                      )}
+                      
+                      {['Mantenimiento', 'Instalación'].includes(service.serviceType) && (
+                        <Grid container spacing={2}>
+                          <Grid item xs={12} sm={6}>
+                            <FormControl fullWidth margin="normal" size="small">
+                              <InputLabel>Tipo de equipo</InputLabel>
+                              <Select
+                                value={service.equipmentType}
+                                onChange={(e) => handleServiceFieldChange(index, 'equipmentType', e.target.value)}
+                                label="Tipo de equipo"
+                                sx={{
+                                  color: colors.text,
+                                  backgroundColor: colors.paper,
+                                  '& .MuiOutlinedInput-notchedOutline': {
+                                    borderColor: colors.border,
+                                  }
+                                }}
+                              >
+                                <MenuItem value="">Seleccionar</MenuItem>
+                                {equipmentTypeOptions.map(equipment => (
+                                  <MenuItem key={equipment} value={equipment}>{equipment}</MenuItem>
+                                ))}
+                              </Select>
+                            </FormControl>
+                          </Grid>
+                          <Grid item xs={12} sm={6}>
+                            <TextField
+                              label="Cantidad de equipos"
+                              fullWidth
+                              type="number"
+                              value={service.equipmentQuantity}
+                              onChange={(e) => handleServiceFieldChange(index, 'equipmentQuantity', e.target.value)}
+                              margin="normal"
+                              size="small"
+                              sx={{
+                                '& .MuiOutlinedInput-root': {
+                                  color: colors.text,
+                                  '& fieldset': {
+                                    borderColor: colors.border,
+                                  },
+                                }
+                              }}
+                            />
+                          </Grid>
+                        </Grid>
+                      )}
+                      
+                      {service.serviceType === 'Desarrollo de Software' && (
+                        <Grid container spacing={2}>
+                          <Grid item xs={12} sm={6}>
+                            <FormControl fullWidth margin="normal" size="small">
+                              <InputLabel>Tipo de software</InputLabel>
+                              <Select
+                                value={service.softwareType}
+                                onChange={(e) => handleServiceFieldChange(index, 'softwareType', e.target.value)}
+                                label="Tipo de software"
+                                sx={{
+                                  color: colors.text,
+                                  backgroundColor: colors.paper,
+                                  '& .MuiOutlinedInput-notchedOutline': {
+                                    borderColor: colors.border,
+                                  }
+                                }}
+                              >
+                                <MenuItem value="">Seleccionar</MenuItem>
+                                {softwareTypeOptions.map(software => (
+                                  <MenuItem key={software} value={software}>{software}</MenuItem>
+                                ))}
+                              </Select>
+                            </FormControl>
+                          </Grid>
+                        </Grid>
+                      )}
+
+                      {/* Selector de lugar */}
+                      <Grid container spacing={2}>
+                        <Grid item xs={12} sm={6}>
+                          <FormControl fullWidth margin="normal" size="small">
+                            <InputLabel>Tipo de lugar</InputLabel>
+                            <Select
+                              value={service.locationType}
+                              onChange={(e) => handleServiceFieldChange(index, 'locationType', e.target.value)}
+                              label="Tipo de lugar"
+                              sx={{
+                                color: colors.text,
+                                backgroundColor: colors.paper,
+                                '& .MuiOutlinedInput-notchedOutline': {
+                                  borderColor: colors.border,
+                                }
+                              }}
+                            >
+                              <MenuItem value="">Seleccionar</MenuItem>
+                              {locationTypeOptions.map(location => (
+                                <MenuItem key={location} value={location}>{location}</MenuItem>
+                              ))}
+                            </Select>
+                          </FormControl>
+                        </Grid>
+                        
+                        {service.locationType && (
+                          <Grid item xs={12} sm={6}>
+                            {service.locationType === 'Facultad' ? (
+                              <FormControl fullWidth margin="normal" size="small">
+                                <InputLabel>Facultad específica</InputLabel>
+                                <Select
+                                  value={service.location}
+                                  onChange={(e) => handleServiceFieldChange(index, 'location', e.target.value)}
+                                  label="Facultad específica"
+                                  sx={{
+                                    color: colors.text,
+                                    backgroundColor: colors.paper,
+                                    '& .MuiOutlinedInput-notchedOutline': {
+                                      borderColor: colors.border,
+                                    }
+                                  }}
+                                >
+                                  <MenuItem value="">Seleccionar</MenuItem>
+                                  {areaOptionsByType.facultad?.map(facultad => (
+                                    <MenuItem key={facultad} value={facultad}>{facultad}</MenuItem>
+                                  ))}
+                                </Select>
+                              </FormControl>
+                            ) : service.locationType === 'Dirección' ? (
+                              <FormControl fullWidth margin="normal" size="small">
+                                <InputLabel>Dirección específica</InputLabel>
+                                <Select
+                                  value={service.location}
+                                  onChange={(e) => handleServiceFieldChange(index, 'location', e.target.value)}
+                                  label="Dirección específica"
+                                  sx={{
+                                    color: colors.text,
+                                    backgroundColor: colors.paper,
+                                    '& .MuiOutlinedInput-notchedOutline': {
+                                      borderColor: colors.border,
+                                    }
+                                  }}
+                                >
+                                  <MenuItem value="">Seleccionar</MenuItem>
+                                  {areaOptionsByType.direccion?.map(direccion => (
+                                    <MenuItem key={direccion} value={direccion}>{direccion}</MenuItem>
+                                  ))}
+                                </Select>
+                              </FormControl>
+                            ) : (
+                              <TextField
+                                label="Lugar específico"
+                                fullWidth
+                                value={service.location}
+                                onChange={(e) => handleServiceFieldChange(index, 'location', e.target.value)}
+                                margin="normal"
+                                size="small"
+                                sx={{
+                                  '& .MuiOutlinedInput-root': {
+                                    color: colors.text,
+                                    '& fieldset': {
+                                      borderColor: colors.border,
+                                    },
+                                  }
+                                }}
+                              />
+                            )}
+                          </Grid>
+                        )}
+                      </Grid>
+
+                      <TextField
+                        label="Requisitos adicionales"
+                        fullWidth
+                        multiline
+                        rows={2}
+                        value={service.requirements}
+                        onChange={(e) => handleServiceFieldChange(index, 'requirements', e.target.value)}
+                        margin="normal"
+                        size="small"
+                        placeholder={
+                          service.modality === 'Online' 
+                            ? 'Ej: Necesita wifi estable, cámara, computadora, micrófono...' 
+                            : 'Ej: Proyector, sala con aire acondicionado, mobiliario...'
+                        }
+                        sx={{
+                          '& .MuiOutlinedInput-root': {
+                            color: colors.text,
+                            '& fieldset': {
+                              borderColor: colors.border,
+                            },
+                          }
+                        }}
+                      />
+                    </Box>
+                  )}
                   
                   <TextField
                     label="Descripción Detallada del Servicio"
@@ -2983,15 +3581,13 @@ const preloadCommonImages = () => {
                     value={service.description}
                     onChange={(e) => handleServiceFieldChange(index, 'description', e.target.value)}
                     margin="normal"
-                    inputProps={{ maxLength: 500 }}
-                    helperText={`${service.description.length}/500 caracteres`}
-                    placeholder="Describa en detalle el servicio requerido, incluyendo especificaciones técnicas, plazo de ejecución, etc."
+                    placeholder="Describa en detalle el servicio requerido"
                     sx={{
-                      backgroundColor: 'transparent',
+                      backgroundColor: colors.paper,
                       color: colors.text,
                       '& .MuiOutlinedInput-root': {
                         '&:hover fieldset': {
-                          borderColor: colors.borgundy,
+                          borderColor: colors.primary,
                         },
                       }
                     }}
@@ -2999,23 +3595,26 @@ const preloadCommonImages = () => {
                 </Box>
               ))}
               
-              <Button
-                variant="outlined"
-                startIcon={<AddIcon />}
-                onClick={specialOrderForm.orderType === 'product' ? handleAddProductField : handleAddServiceField}
-                fullWidth
-                sx={{ 
-                  mb: 3,
-                  borderColor: colors.borgundy,
-                  color: colors.borgundy,
-                  '&:hover': {
-                    borderColor: colors.sapphire,
-                    backgroundColor: 'rgba(2, 33, 71, 0.04)'
-                  }
-                }}
-              >
-                Añadir otro {specialOrderForm.orderType === 'product' ? 'producto' : 'servicio'}
-              </Button>
+              {/* Botón para añadir servicio */}
+              {specialOrderForm.orderType === 'service' && (
+                <Button
+                  variant="outlined"
+                  startIcon={<AddIcon />}
+                  onClick={handleAddServiceField}
+                  fullWidth
+                  sx={{ 
+                    mb: 3,
+                    borderColor: colors.primary,
+                    color: colors.primary,
+                    '&:hover': {
+                      borderColor: colors.secondary,
+                      backgroundColor: colors.border
+                    }
+                  }}
+                >
+                  Añadir otro servicio
+                </Button>
+              )}
               
               <FormControl fullWidth sx={{ mb: 3 }}>
                 <InputLabel sx={{ color: colors.textSecondary }}>Tipo de Pago</InputLabel>
@@ -3024,10 +3623,10 @@ const preloadCommonImages = () => {
                   label="Tipo de Pago"
                   onChange={(e) => setSpecialOrderForm({...specialOrderForm, currency: e.target.value})}
                   sx={{
-                    backgroundColor: 'transparent',
+                    backgroundColor: colors.paper,
                     color: colors.text,
                     '&:hover .MuiOutlinedInput-notchedOutline': {
-                      borderColor: colors.borgundy,
+                      borderColor: colors.primary,
                     }
                   }}
                 >
@@ -3037,7 +3636,6 @@ const preloadCommonImages = () => {
                 </Select>
               </FormControl>
               
-              {/* En el carrito */}
               <FormControl fullWidth sx={{ mb: 3 }}>
                 <InputLabel sx={{ color: colors.textSecondary }}>Proyecto</InputLabel>
                 <Select
@@ -3045,10 +3643,10 @@ const preloadCommonImages = () => {
                   label="Proyecto"
                   onChange={(e) => setSpecialOrderForm({...specialOrderForm, projectId: e.target.value})}
                   sx={{
-                    backgroundColor: 'transparent',
+                    backgroundColor: colors.paper,
                     color: colors.text,
                     '&:hover .MuiOutlinedInput-notchedOutline': {
-                      borderColor: colors.borgundy,
+                      borderColor: colors.primary,
                     }
                   }}
                 >
@@ -3071,19 +3669,19 @@ const preloadCommonImages = () => {
                 size="large"
                 onClick={handleSpecialOrderSubmit}
                 sx={{ 
-                  backgroundColor: colors.borgundy,
-                  '&:hover': { backgroundColor: colors.sapphire }
+                  backgroundColor: colors.primary,
+                  '&:hover': { backgroundColor: colors.secondary }
                 }}
               >
-                Solicitar Pedido Extra
+                {editingOrderId ? 'Actualizar Pedido Extra' : 'Solicitar Pedido Extra'}
               </Button>
             </Paper>
           </Box>
         )}
 
-        {/* Vista de Historial - CORREGIDA: ordenar por más reciente primero y evitar duplicación */}
+        {/* Vista de Historial - ocultar edición en ciertos roles */}
         {viewMode === 'history' && (
-          <Box sx={{ backgroundColor: colors.paper }}>
+          <Box sx={{ backgroundColor: colors.paper, p: 3, borderRadius: 2 }}>
             <Box sx={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 2, mb: 3 }}>
               <TextField
                 placeholder="Buscar por usuario, área, tipo, proyecto o número de pedido..."
@@ -3092,7 +3690,7 @@ const preloadCommonImages = () => {
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 InputProps={{
-                  startAdornment: <SearchIcon color="action" />,
+                  startAdornment: <SearchIcon sx={{ color: colors.textSecondary }} />,
                 }}
                 fullWidth
                 sx={{
@@ -3100,10 +3698,10 @@ const preloadCommonImages = () => {
                   '& .MuiOutlinedInput-root': {
                     color: colors.text,
                     '& fieldset': {
-                      borderColor: colors.sapphire,
+                      borderColor: colors.border,
                     },
                     '&:hover fieldset': {
-                      borderColor: colors.borgundy,
+                      borderColor: colors.primary,
                     },
                   }
                 }}
@@ -3120,7 +3718,7 @@ const preloadCommonImages = () => {
                       backgroundColor: colors.paper,
                       color: colors.text,
                       '&:hover .MuiOutlinedInput-notchedOutline': {
-                        borderColor: colors.borgundy,
+                        borderColor: colors.primary,
                       }
                     }}
                   >
@@ -3151,13 +3749,13 @@ const preloadCommonImages = () => {
             ) : (
               <TableContainer component={Paper} sx={{ 
                 borderRadius: 2, 
-                boxShadow: 2, 
-                border: `1px solid ${colors.shellstone}`,
+                boxShadow: 1, 
+                border: `1px solid ${colors.border}`,
                 backgroundColor: colors.paper
               }}>
                 <Table>
                   <TableHead>
-                    <TableRow sx={{ backgroundColor: colors.shellstone }}>
+                    <TableRow sx={{ backgroundColor: colors.background }}>
                       <TableCell sx={{ color: colors.text, fontWeight: 'bold' }}>N° Pedido</TableCell>
                       <TableCell sx={{ color: colors.text, fontWeight: 'bold' }}>Tipo</TableCell>
                       <TableCell sx={{ color: colors.text, fontWeight: 'bold' }}>Jefe de Proyecto</TableCell>
@@ -3173,18 +3771,19 @@ const preloadCommonImages = () => {
 
                   <TableBody>
                     {filteredPurchases.map((purchase) => {
-                      //  Buscar información actualizada del proyecto
                       const project = allProjects.find(p => p.id === purchase.projectId);
                       const textColor = colors.text;
+                      const canEdit = !['comercial', 'gestor'].includes(currentUser?.role) && 
+                                     purchase.userId === currentUser?.id && 
+                                     purchase.status !== 'En proceso';
 
                       return (
                         <TableRow 
                           key={purchase.id} 
                           hover 
                           sx={{ 
-                            '&:hover': { backgroundColor: colors.paper },
+                            '&:hover': { backgroundColor: colors.border },
                             backgroundColor: colors.paper,
-                            color: colors.borgundy
                           }}
                         >
                           <TableCell sx={{ color: textColor }}>
@@ -3199,11 +3798,11 @@ const preloadCommonImages = () => {
                               }
                               sx={{
                                 backgroundColor: 
-                                  purchase.category === 'Productos' ? colors.borgundy : 
-                                  purchase.category === 'Servicios' ? colors.sapphire : 
-                                  purchase.category?.includes('P.Extra-producto') ? '#1976d2' :
-                                  purchase.category?.includes('P.Extra-servicio') ? '#ed6c02' :
-                                  colors.tan,
+                                  purchase.category === 'Productos' ? colors.primary : 
+                                  purchase.category === 'Servicios' ? colors.secondary : 
+                                  purchase.category?.includes('P.Extra-producto') ? colors.info :
+                                  purchase.category?.includes('P.Extra-servicio') ? colors.warning :
+                                  colors.accent,
                                 color: 'white',
                                 fontSize: '0.75rem'
                               }}
@@ -3217,8 +3816,8 @@ const preloadCommonImages = () => {
                                   width: 32, 
                                   height: 32, 
                                   fontSize: '0.8rem',
-                                  backgroundColor: colors.shellstone,
-                                  color: 'white'
+                                  backgroundColor: colors.border,
+                                  color: colors.text
                                 }}
                               >
                                 {getUserName(purchase.userId)?.charAt(0)}
@@ -3231,7 +3830,6 @@ const preloadCommonImages = () => {
                           <TableCell sx={{ color: textColor }}>
                             {getUserArea(purchase.userId)}
                           </TableCell>
-                          {/*  Mostrar información REAL del proyecto */}
                           <TableCell sx={{ color: textColor, fontWeight: 'bold' }}>
                             {purchase.projectNumber || project?.projectNumber || 'N/A'}
                           </TableCell>
@@ -3249,8 +3847,8 @@ const preloadCommonImages = () => {
                               label={purchase.priority || 'Media'}
                               sx={{
                                 backgroundColor: 
-                                  purchase.priority === 'Alta' ? '#f44336' : 
-                                  purchase.priority === 'Media' ? colors.tan : '#4caf50',
+                                  purchase.priority === 'Alta' ? colors.error : 
+                                  purchase.priority === 'Media' ? colors.warning : colors.success,
                                 color: 'white'
                               }}
                               size="small"
@@ -3263,9 +3861,9 @@ const preloadCommonImages = () => {
                                   size="small" 
                                   onClick={() => handleViewOrderDetails(purchase)}
                                   sx={{ 
-                                    color: colors.sapphire,
+                                    color: colors.secondary,
                                     '&:hover': {
-                                      backgroundColor: 'rgba(2, 33, 71, 0.1)'
+                                      backgroundColor: colors.border
                                     }
                                   }}
                                 >
@@ -3273,37 +3871,42 @@ const preloadCommonImages = () => {
                                 </IconButton>
                               </Tooltip>
                               
-                              <Tooltip title="Editar pedido">
-                                <IconButton 
-                                  size="small" 
-                                  onClick={() => handleEditOrder(purchase)}
-                                  sx={{ 
-                                    color: colors.borgundy,
-                                    '&:hover': {
-                                      backgroundColor: 'rgba(2, 33, 71, 0.1)'
-                                    }
-                                  }}
-                                >
-                                  <EditIcon />
-                                </IconButton>
-                              </Tooltip>
-                              <Tooltip title="Eliminar pedido">
-                                <IconButton 
-                                  size="small" 
-                                  onClick={() => handleDeleteOrder(
-                                    purchase.id,
-                                    purchase.type === 'special'
-                                  )}
-                                  sx={{ 
-                                    color: '#f44336',
-                                    '&:hover': {
-                                      backgroundColor: 'rgba(244, 67, 54, 0.1)'
-                                    }
-                                  }}
-                                >
-                                  <DeleteIcon />
-                                </IconButton>
-                              </Tooltip>
+                              {canEdit && (
+                                <Tooltip title="Editar pedido">
+                                  <IconButton 
+                                    size="small" 
+                                    onClick={() => handleEditOrder(purchase)}
+                                    sx={{ 
+                                      color: colors.primary,
+                                      '&:hover': {
+                                        backgroundColor: colors.border
+                                      }
+                                    }}
+                                  >
+                                    <EditIcon />
+                                  </IconButton>
+                                </Tooltip>
+                              )}
+                              
+                              {(purchase.userId === currentUser?.id || currentUser?.role === 'admin') && (
+                                <Tooltip title="Eliminar pedido">
+                                  <IconButton 
+                                    size="small" 
+                                    onClick={() => handleDeleteOrder(
+                                      purchase.id,
+                                      purchase.type === 'special'
+                                    )}
+                                    sx={{ 
+                                      color: colors.error,
+                                      '&:hover': {
+                                        backgroundColor: colors.border
+                                      }
+                                    }}
+                                  >
+                                    <DeleteIcon />
+                                  </IconButton>
+                                </Tooltip>
+                              )}
                             </Box>
                           </TableCell>
                         </TableRow>
@@ -3316,38 +3919,44 @@ const preloadCommonImages = () => {
           </Box>
         )}
 
-        {/* Vista de Empresas vertical (solo admin) */}
+        {/* Vista de Empresas vertical (solo admin) - MODIFICADA para mostrar empresas sin productos de scraping */}
         {viewMode === 'companies' && currentUser?.role === 'admin' && (
           <Box sx={{ 
-            maxWidth: 1000, 
-            margin: '0',
+            maxWidth: 1200, 
+            margin: '0 auto',
             width: '100%',
-            backgroundColor: colors.paper
           }}>
-            <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+              <Typography variant="h5" sx={{ color: colors.primary, fontWeight: 'bold' }}>
+                Gestión de Empresas
+              </Typography>
               <Button
                 variant="contained"
                 startIcon={<AddIcon />}
                 onClick={() => {
+                  const newId = Date.now().toString();
                   setForm({ 
-                    id: null, 
+                    id: newId,
                     supplier: '', 
                     company: '', 
                     businessType: '', 
+                    website: '',
                     dataType: 'both',
                     companyImage: null,
                     currency: 'CUP',
                     contractActive: false,
                     productsCount: 0,
-                    servicesCount: 0
+                    servicesCount: 0,
+                    scrapingStatus: 'not_started',
+                    scrapedProducts: []
                   });
                   setFiles({ products: null, services: null });
                   setEditMode(false);
                   setUploadModal(true);
                 }}
                 sx={{ 
-                  backgroundColor: colors.borgundy, 
-                  '&:hover': { backgroundColor: colors.sapphire }
+                  backgroundColor: colors.primary, 
+                  '&:hover': { backgroundColor: colors.secondary }
                 }}
               >
                 Agregar Empresa
@@ -3355,7 +3964,7 @@ const preloadCommonImages = () => {
             </Box>
             
             {catalogs.length === 0 ? (
-              <Alert severity="info" sx={{ mt: 2, backgroundColor: colors.paper, color: colors.text }}>
+              <Alert severity="info" sx={{ mt: 2, backgroundColor: colors.paper, color: colors.text, borderRadius: 2 }}>
                 No hay empresas registradas. Comience agregando un catálogo.
               </Alert>
             ) : (
@@ -3366,48 +3975,98 @@ const preloadCommonImages = () => {
                   const serviceCatalog = companyCatalogs.find(c => c.dataType === 'services');
                   const companyData = productCatalog || serviceCatalog || {};
                   
+                  // Verificar si es una empresa con website pero sin productos de scraping
+                  const hasWebsite = companyData.website && companyData.website.trim() !== '';
+                  const hasScrapedProducts = companyData.scrapedProducts && companyData.scrapedProducts.length > 0;
+                  
+                  // Mostrar tarjeta especial para empresas con website pero sin productos extraídos
+                  if (hasWebsite && !hasScrapedProducts && (!productCatalog || productCatalog.data.length === 0)) {
+                    return (
+                      <Grid item xs={12} sm={6} md={4} key={companyName}>
+                        <CompanyCard companyData={companyData} />
+                      </Grid>
+                    );
+                  }
+                  
                   return (
                     <Grid item xs={12} sm={6} md={4} key={companyName}>
                       <Paper sx={{ 
                         p: 2, 
                         borderRadius: 2, 
-                        boxShadow: 2,
+                        boxShadow: 1,
                         display: 'flex',
                         flexDirection: 'column',
                         alignItems: 'center',
                         textAlign: 'center',
                         height: '100%',
                         position: 'relative',
-                        transition: 'all 0.3s ease',
-                        border: `1px solid ${colors.shellstone}`,
+                        transition: 'all 0.2s ease',
+                        border: `1px solid ${colors.border}`,
                         backgroundColor: colors.paper,
                         '&:hover': {
-                          transform: 'translateY(-5px)',
-                          boxShadow: 4,
-                          borderColor: colors.borgundy
+                          transform: 'translateY(-2px)',
+                          boxShadow: 2,
+                          borderColor: colors.primary
                         }
                       }}>
                         
+                        {/* Avatar de la empresa */}
                         <Avatar
                           src={companyData.companyImage}
                           sx={{ 
                             width: 60, 
                             height: 60, 
                             mb: 2,
-                            backgroundColor: colors.borgundy
+                            backgroundColor: colors.primary
                           }}
                         >
                           {companyName.charAt(0)}
                         </Avatar>
                         
-                        <Box sx={{ flexGrow: 1 }}>
-                          <Typography variant="h6" fontWeight="bold" noWrap sx={{ color: colors.borgundy }}>
+                        {/* Información de la empresa */}
+                        <Box sx={{ flexGrow: 1, width: '100%' }}>
+                          <Typography variant="h6" fontWeight="bold" noWrap sx={{ color: colors.primary, mb: 1 }}>
                             {companyName}
                           </Typography>
-                          <Typography variant="body2" color={colors.textSecondary} noWrap>
+                          
+                          <Typography variant="body2" color={colors.textSecondary} noWrap sx={{ mb: 2 }}>
                             {companyData.businessType} • {companyData.supplier}
                           </Typography>
                           
+                          {/* Mostrar website si existe */}
+                          {companyData.website && (
+                            <Box sx={{ mb: 2 }}>
+                              <Button
+                                variant="outlined"
+                                size="small"
+                                startIcon={<LanguageIcon />}
+                                onClick={() => visitWebsite(companyData.website)}
+                                sx={{ 
+                                  borderColor: colors.primary,
+                                  color: colors.primary,
+                                  fontSize: '0.75rem',
+                                  '&:hover': {
+                                    borderColor: colors.secondary,
+                                    backgroundColor: colors.border
+                                  }
+                                }}
+                              >
+                                Visitar Tienda Online
+                              </Button>
+                            </Box>
+                          )}
+                          
+                          {/* Vista previa de website si existe */}
+                          {companyData.website && (
+                            <Box sx={{ mb: 2 }}>
+                              <WebsitePreview 
+                                websiteUrl={companyData.website}
+                                companyName={companyName}
+                              />
+                            </Box>
+                          )}
+                          
+                          {/* Estadísticas */}
                           <Box sx={{ 
                             display: 'flex', 
                             justifyContent: 'space-around',
@@ -3415,8 +4074,8 @@ const preloadCommonImages = () => {
                             width: '100%'
                           }}>
                             <Box sx={{ textAlign: 'center' }}>
-                              <StoreIcon fontSize="small" sx={{ color: colors.borgundy }} />
-                              <Typography variant="body2" fontSize="0.9rem" sx={{ color: colors.borgundy }}>
+                              <StoreIcon fontSize="small" sx={{ color: colors.primary }} />
+                              <Typography variant="body2" fontSize="0.9rem" sx={{ color: colors.primary }}>
                                 {productCatalog ? productCatalog.data.length : 0}
                               </Typography>
                               <Typography variant="caption" color={colors.textSecondary}>
@@ -3424,8 +4083,8 @@ const preloadCommonImages = () => {
                               </Typography>
                             </Box>
                             <Box sx={{ textAlign: 'center' }}>
-                              <CategoryIcon fontSize="small" sx={{ color: colors.sapphire }} />
-                              <Typography variant="body2" fontSize="0.9rem" sx={{ color: colors.sapphire }}>
+                              <CategoryIcon fontSize="small" sx={{ color: colors.secondary }} />
+                              <Typography variant="body2" fontSize="0.9rem" sx={{ color: colors.secondary }}>
                                 {serviceCatalog ? serviceCatalog.data.length : 0}
                               </Typography>
                               <Typography variant="caption" color={colors.textSecondary}>
@@ -3435,10 +4094,10 @@ const preloadCommonImages = () => {
                             <Box sx={{ textAlign: 'center' }}>
                               <CheckCircleIcon 
                                 fontSize="small" 
-                                sx={{ color: companyData.contractActive ? "#4caf50" : "#f44336" }} 
+                                sx={{ color: companyData.contractActive ? colors.success : colors.error }} 
                               />
                               <Typography variant="body2" fontSize="0.9rem" sx={{ 
-                                color: companyData.contractActive ? "#4caf50" : "#f44336" 
+                                color: companyData.contractActive ? colors.success : colors.error 
                               }}>
                                 {companyData.contractActive ? "Sí" : "No"}
                               </Typography>
@@ -3449,6 +4108,7 @@ const preloadCommonImages = () => {
                           </Box>
                         </Box>
                         
+                        {/* Botones de acción */}
                         <Box sx={{ 
                           display: 'flex', 
                           gap: 1,
@@ -3460,18 +4120,7 @@ const preloadCommonImages = () => {
                             variant="outlined"
                             color="error"
                             startIcon={<DeleteIcon />}
-                            onClick={() => {
-                              if (window.confirm(`¿Eliminar todos los catálogos de ${companyName}?`)) {
-                                const updated = catalogs.filter(c => c.company !== companyName);
-                                setCatalogs(updated);
-                                localStorage.setItem('OASiS_catalogs', JSON.stringify(updated));
-                                addNotification({
-                                  title: 'Empresa eliminada',
-                                  message: `Se eliminaron todos los catálogos de ${companyName}`,
-                                  type: 'warning'
-                                });
-                              }
-                            }}
+                            onClick={() => handleDeleteCompany(companyName)}
                             sx={{ flex: 1 }}
                           >
                             Eliminar
@@ -3481,14 +4130,13 @@ const preloadCommonImages = () => {
                             variant="contained"
                             startIcon={<EditIcon />}
                             onClick={() => {
-                              // Pasar el catálogo base correcto
                               const baseCatalog = productCatalog || serviceCatalog || companyCatalogs[0] || {};
                               handleEditCatalog(baseCatalog);
                             }}
                             sx={{ 
                               flex: 1,
-                              backgroundColor: colors.borgundy,
-                              '&:hover': { backgroundColor: colors.sapphire }
+                              backgroundColor: colors.primary,
+                              '&:hover': { backgroundColor: colors.secondary }
                             }}
                           >
                             Editar
@@ -3509,19 +4157,31 @@ const preloadCommonImages = () => {
             sx: {
               backgroundColor: colors.paper,
               color: colors.text,
+              borderRadius: 2
             }
           }}
         >
           {productDialog && (
             <>
-              <DialogTitle sx={{ backgroundColor: colors.paper, color: colors.borgundy }}>
+              <DialogTitle sx={{ backgroundColor: colors.paper, color: colors.primary, borderBottom: `1px solid ${colors.border}` }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   {productDialog.name}
+                  {productDialog.fromWebsite && (
+                    <Chip
+                      label="Tienda Online"
+                      size="small"
+                      sx={{ 
+                        backgroundColor: colors.info,
+                        color: 'white',
+                        fontSize: '0.7rem'
+                      }}
+                    />
+                  )}
                 </Box>
               </DialogTitle>
               <DialogContent sx={{ backgroundColor: colors.paper }}>
                 <Box sx={{ mt: 2 }}>
-                  {/* IMAGEN MEJORADA */}
+                  {/* IMAGEN */}
                   <Box sx={{ 
                     display: 'flex', 
                     justifyContent: 'center', 
@@ -3529,7 +4189,7 @@ const preloadCommonImages = () => {
                     borderRadius: 2,
                     overflow: 'hidden',
                     height: '250px',
-                    backgroundColor: colors.paper,
+                    backgroundColor: colors.background,
                     position: 'relative'
                   }}>
                     <EnhancedProductImage 
@@ -3543,7 +4203,7 @@ const preloadCommonImages = () => {
                     />
                   </Box>
                   
-                  <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold', color: colors.borgundy }}>
+                  <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold', color: colors.text }}>
                     {productDialog.name}
                   </Typography>
                   
@@ -3563,15 +4223,37 @@ const preloadCommonImages = () => {
                     <strong>Proveedor:</strong> {productDialog.supplier}
                   </Typography>
                   
+                  {/* Botón para visitar tienda si es producto de scraping */}
+                  {productDialog.fromWebsite && productDialog.website && (
+                    <Box sx={{ mb: 2 }}>
+                      <Button
+                        variant="outlined"
+                        startIcon={<LanguageIcon />}
+                        onClick={() => visitWebsite(productDialog.website)}
+                        fullWidth
+                        sx={{ 
+                          borderColor: colors.primary,
+                          color: colors.primary,
+                          '&:hover': {
+                            borderColor: colors.secondary,
+                            backgroundColor: colors.border
+                          }
+                        }}
+                      >
+                        Visitar Tienda Online
+                      </Button>
+                    </Box>
+                  )}
+                  
                   <Box sx={{ 
                     display: 'flex', 
                     justifyContent: 'space-between', 
                     alignItems: 'center',
                     mb: 2,
                     p: 2,
-                    backgroundColor: colors.paper,
+                    backgroundColor: colors.background,
                     borderRadius: 2,
-                    border: `1px solid ${colors.shellstone}`
+                    border: `1px solid ${colors.border}`
                   }}>
                     <Typography variant="h5" color="error" sx={{ fontWeight: 'bold' }}>
                       ${productDialog.price} CUP
@@ -3604,7 +4286,7 @@ const preloadCommonImages = () => {
                   })()}
                 </Box>
               </DialogContent>
-              <DialogActions sx={{ backgroundColor: colors.paper }}>
+              <DialogActions sx={{ backgroundColor: colors.paper, borderTop: `1px solid ${colors.border}` }}>
                 <Button onClick={() => setProductDialog(null)} sx={{ color: colors.textSecondary }}>Cerrar</Button>
                 {(() => {
                   const isOutOfStock = productDialog.stock <= 0 || productDialog.availability === 'Agotado';
@@ -3618,9 +4300,8 @@ const preloadCommonImages = () => {
                       }}
                       disabled={isOutOfStock}
                       sx={{ 
-                        backgroundColor: isOutOfStock ? 'grey' : colors.borgundy,
-                        '&:hover': { backgroundColor: isOutOfStock ? 'grey' : colors.sapphire },
-                        '&.Mui-disabled': { backgroundColor: 'rgba(2, 33, 71, 0.3)' }
+                        backgroundColor: isOutOfStock ? 'grey' : colors.primary,
+                        '&:hover': { backgroundColor: isOutOfStock ? 'grey' : colors.secondary },
                       }}
                     >
                       Añadir al carrito
@@ -3643,14 +4324,14 @@ const preloadCommonImages = () => {
               backgroundColor: colors.paper,
               color: colors.text,
               borderRadius: 2,
-              boxShadow: 3
+              boxShadow: 2
             }
           }}
         >
           {orderDetailsDialog && (
             <>
               <DialogTitle sx={{ 
-                backgroundColor: colors.borgundy, 
+                backgroundColor: colors.primary, 
                 color: 'white',
                 display: 'flex',
                 alignItems: 'center',
@@ -3661,9 +4342,8 @@ const preloadCommonImages = () => {
               </DialogTitle>
               
               <DialogContent sx={{ mt: 2 }}>
-                {/* Información General del Pedido */}
                 <Box sx={{ mb: 3 }}>
-                  <Typography variant="h6" gutterBottom sx={{ color: colors.borgundy, borderBottom: `2px solid ${colors.borgundy}`, pb: 1 }}>
+                  <Typography variant="h6" gutterBottom sx={{ color: colors.primary, borderBottom: `2px solid ${colors.primary}`, pb: 1 }}>
                     Información General
                   </Typography>
                   
@@ -3680,27 +4360,16 @@ const preloadCommonImages = () => {
                         }
                         sx={{
                           backgroundColor: 
-                            orderDetailsDialog.category === 'Productos' ? colors.borgundy : 
-                            orderDetailsDialog.category === 'Servicios' ? colors.sapphire : 
-                            orderDetailsDialog.category?.includes('P.Extra-producto') ? '#1976d2' :
-                            orderDetailsDialog.category?.includes('P.Extra-servicio') ? '#ed6c02' :
-                            colors.tan,
+                            orderDetailsDialog.category === 'Productos' ? colors.primary : 
+                            orderDetailsDialog.category === 'Servicios' ? colors.secondary : 
+                            orderDetailsDialog.category?.includes('P.Extra-producto') ? colors.info :
+                            orderDetailsDialog.category?.includes('P.Extra-servicio') ? colors.warning :
+                            colors.accent,
                           color: 'white',
                           fontSize: '0.75rem'
                         }}
                         size="small"
                       />
-                    </Grid>
-                    
-                    <Grid item xs={12} sm={6}>
-                      <Typography variant="body1" sx={{ fontWeight: 'bold', color: colors.textSecondary }}>
-                        Empresa:
-                      </Typography>
-                      <Typography variant="body2" sx={{ color: colors.text }}>
-                        {orderDetailsDialog.company || 
-                        (orderDetailsDialog.items && orderDetailsDialog.items[0]?.company) || 
-                        'N/A'}
-                      </Typography>
                     </Grid>
                     
                     <Grid item xs={12} sm={6}>
@@ -3713,7 +4382,7 @@ const preloadCommonImages = () => {
                             width: 32, 
                             height: 32, 
                             fontSize: '0.8rem',
-                            backgroundColor: colors.borgundy,
+                            backgroundColor: colors.primary,
                             color: 'white'
                           }}
                         >
@@ -3783,8 +4452,8 @@ const preloadCommonImages = () => {
                         label={orderDetailsDialog.priority || 'Media'}
                         sx={{
                           backgroundColor: 
-                            orderDetailsDialog.priority === 'Alta' ? '#f44336' : 
-                            orderDetailsDialog.priority === 'Media' ? colors.tan : '#4caf50',
+                            orderDetailsDialog.priority === 'Alta' ? colors.error : 
+                            orderDetailsDialog.priority === 'Media' ? colors.warning : colors.success,
                           color: 'white'
                         }}
                         size="small"
@@ -3804,7 +4473,7 @@ const preloadCommonImages = () => {
 
                 {/* Detalles de los Items */}
                 <Box sx={{ mb: 3 }}>
-                  <Typography variant="h6" gutterBottom sx={{ color: colors.borgundy, borderBottom: `2px solid ${colors.tan}`, pb: 1 }}>
+                  <Typography variant="h6" gutterBottom sx={{ color: colors.primary, borderBottom: `2px solid ${colors.accent}`, pb: 1 }}>
                     {orderDetailsDialog.orderType === 'service' ? 'Servicios Solicitados' : 'Productos Solicitados'}
                   </Typography>
                   
@@ -3813,16 +4482,14 @@ const preloadCommonImages = () => {
                       No hay items en este pedido
                     </Alert>
                   ) : (
-                    <TableContainer component={Paper} sx={{ mt: 2, boxShadow: 1, backgroundColor: colors.background }}>
+                    <TableContainer component={Paper} sx={{ mt: 2, boxShadow: 0, backgroundColor: colors.background }}>
                       <Table size="small">
                         <TableHead>
-                          <TableRow sx={{ backgroundColor: colors.paper }}>
+                          <TableRow sx={{ backgroundColor: colors.border }}>
                             <TableCell sx={{ fontWeight: 'bold', color: colors.text }}>Nombre</TableCell>
-                            <TableCell sx={{ fontWeight: 'bold', color: colors.text }}>Empresa</TableCell>
                             <TableCell sx={{ fontWeight: 'bold', color: colors.text }}>Cantidad</TableCell>
                             <TableCell sx={{ fontWeight: 'bold', color: colors.text }}>Precio Unitario</TableCell>
                             <TableCell sx={{ fontWeight: 'bold', color: colors.text }}>Subtotal</TableCell>
-                            <TableCell sx={{ fontWeight: 'bold', color: colors.text }}>Descripción</TableCell>
                           </TableRow>
                         </TableHead>
                         <TableBody>
@@ -3830,9 +4497,6 @@ const preloadCommonImages = () => {
                             <TableRow key={index} hover sx={{ backgroundColor: colors.paper }}>
                               <TableCell sx={{ color: colors.text }}>
                                 {item.name || item.serviceType || 'N/A'}
-                              </TableCell>
-                              <TableCell sx={{ color: colors.text }}>
-                                {item.company || 'N/A'}
                               </TableCell>
                               <TableCell sx={{ color: colors.text }}>
                                 {item.quantity || 1}
@@ -3843,11 +4507,6 @@ const preloadCommonImages = () => {
                               <TableCell sx={{ color: colors.text, fontWeight: 'bold' }}>
                                 ${item.price && item.quantity ? (item.price * item.quantity).toFixed(2) : 'N/A'} {orderDetailsDialog.currency || 'CUP'}
                               </TableCell>
-                              <TableCell sx={{ color: colors.text, maxWidth: 200 }}>
-                                <Typography variant="body2" noWrap title={item.description}>
-                                  {item.description || 'Sin descripción'}
-                                </Typography>
-                              </TableCell>
                             </TableRow>
                           ))}
                         </TableBody>
@@ -3855,78 +4514,37 @@ const preloadCommonImages = () => {
                     </TableContainer>
                   )}
                 </Box>
-
-                {/* Información Adicional para Pedidos Extra */}
-                {(orderDetailsDialog.type === 'special' || orderDetailsDialog.category?.includes('P.Extra')) && (
-                  <Box sx={{ mb: 3 }}>
-                    <Typography variant="h6" gutterBottom sx={{ color: colors.borgundy, borderBottom: `2px solid ${colors.tan}`, pb: 1 }}>
-                      Información Adicional del Pedido Extra
-                    </Typography>
-                    
-                    <Box sx={{ p: 2, backgroundColor: colors.paper, borderRadius: 2, mt: 2 }}>
-                      <Typography variant="body2" sx={{ color: colors.textSecondary, fontStyle: 'italic' }}>
-                        Este es un pedido especial que requiere aprobación adicional. 
-                        {orderDetailsDialog.orderType === 'product' 
-                          ? ' Los productos solicitados no están en el catálogo regular.' 
-                          : ' Los servicios solicitados requieren cotización especial.'}
-                      </Typography>
-                      
-                      {orderDetailsDialog.items && orderDetailsDialog.items.some(item => item.equipmentType) && (
-                        <Box sx={{ mt: 2 }}>
-                          <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: colors.borgundy }}>
-                            Especificaciones Técnicas:
-                          </Typography>
-                          {orderDetailsDialog.items
-                            .filter(item => item.equipmentType && item.equipmentType !== 'other')
-                            .map((item, index) => (
-                              <Box key={index} sx={{ mt: 1, p: 1, backgroundColor: colors.paper, borderRadius: 1 }}>
-                                <Typography variant="body2" sx={{ fontWeight: 'bold', color: colors.sapphire }}>
-                                  {item.name} ({EQUIPMENT_CONFIG[item.equipmentType]?.name})
-                                </Typography>
-                                {item.characteristics && Object.keys(item.characteristics).length > 0 && (
-                                  <Box sx={{ mt: 0.5 }}>
-                                    {Object.entries(item.characteristics).map(([key, value]) => (
-                                      <Typography key={key} variant="caption" sx={{ display: 'block', color: colors.textSecondary }}>
-                                        • {EQUIPMENT_CONFIG[item.equipmentType]?.characteristics[key]?.label}: {Array.isArray(value) ? value.join(', ') : value}
-                                      </Typography>
-                                    ))}
-                                  </Box>
-                                )}
-                              </Box>
-                            ))}
-                        </Box>
-                      )}
-                    </Box>
-                  </Box>
-                )}
               </DialogContent>
               
-              <DialogActions sx={{ p: 2, backgroundColor: colors.paper }}>
+              <DialogActions sx={{ p: 2, backgroundColor: colors.paper, borderTop: `1px solid ${colors.border}` }}>
                 <Button 
                   onClick={() => setOrderDetailsDialog(null)}
                   sx={{ color: colors.textSecondary }}
                 >
                   Cerrar
                 </Button>
-                <Button 
-                  variant="contained"
-                  onClick={() => {
-                    handleEditOrder(orderDetailsDialog);
-                    setOrderDetailsDialog(null);
-                  }}
-                  sx={{ 
-                    backgroundColor: colors.borgundy,
-                    '&:hover': { backgroundColor: colors.sapphire }
-                  }}
-                >
-                  Editar Pedido
-                </Button>
+                {(orderDetailsDialog.userId === currentUser?.id || currentUser?.role === 'admin') && 
+                 orderDetailsDialog.status !== 'En proceso' && (
+                  <Button 
+                    variant="contained"
+                    onClick={() => {
+                      handleEditOrder(orderDetailsDialog);
+                      setOrderDetailsDialog(null);
+                    }}
+                    sx={{ 
+                      backgroundColor: colors.primary,
+                      '&:hover': { backgroundColor: colors.secondary }
+                    }}
+                  >
+                    Editar Pedido
+                  </Button>
+                )}
               </DialogActions>
             </>
           )}
         </Dialog>
 
-        {/* Modal de Subida y Edición con diseño mejorado */}
+        {/* Modal de Subida y Edición */}
         <Dialog 
           open={uploadModal} 
           onClose={handleCancelEdit} 
@@ -3934,18 +4552,17 @@ const preloadCommonImages = () => {
           fullWidth
           PaperProps={{
             sx: {
-              background: `rgba(${darkMode ? '45, 55, 72' : '245, 240, 233'}, 0.9)`,
-              backdropFilter: 'blur(10px)',
-              border: `1px solid ${colors.shellstone}`,
-              borderRadius: 3,
-              boxShadow: '0 8px 32px 0 rgba(2, 33, 71, 0.2)'
+              backgroundColor: colors.paper,
+              border: `1px solid ${colors.border}`,
+              borderRadius: 2,
             }
           }}
         >
           <DialogTitle sx={{ 
             backgroundColor: colors.paper, 
-            color: colors.borgundy,
-            borderBottom: `1px solid ${colors.shellstone}`
+            color: colors.primary,
+            borderBottom: `1px solid ${colors.border}`,
+            fontWeight: 'bold'
           }}>
             {editMode ? 'Editar Empresa' : 'Nueva Empresa'}
           </DialogTitle>
@@ -3960,16 +4577,25 @@ const preloadCommonImages = () => {
                     onChange={(e) => setForm({ ...form, supplier: e.target.value })}
                     required
                     margin="normal"
+                    variant="outlined"
                     sx={{
-                      backgroundColor: colors.paper,
                       '& .MuiOutlinedInput-root': {
                         color: colors.text,
                         '& fieldset': {
-                          borderColor: colors.shellstone,
+                          borderColor: colors.border,
                         },
                         '&:hover fieldset': {
-                          borderColor: colors.borgundy,
+                          borderColor: colors.primary,
                         },
+                        '&.Mui-focused fieldset': {
+                          borderColor: colors.primary,
+                        }
+                      },
+                      '& .MuiInputLabel-root': {
+                        color: colors.textSecondary,
+                      },
+                      '& .MuiInputLabel-root.Mui-focused': {
+                        color: colors.primary,
                       }
                     }}
                   />
@@ -3980,21 +4606,29 @@ const preloadCommonImages = () => {
                     fullWidth
                     value={form.company}
                     onChange={(e) => {
-                      console.log('✏️ Cambiando nombre de empresa:', e.target.value);
                       setForm({ ...form, company: e.target.value });
                     }}
                     required
                     margin="normal"
+                    variant="outlined"
                     sx={{
-                      backgroundColor: colors.paper,
                       '& .MuiOutlinedInput-root': {
                         color: colors.text,
                         '& fieldset': {
-                          borderColor: colors.shellstone,
+                          borderColor: colors.border,
                         },
                         '&:hover fieldset': {
-                          borderColor: colors.borgundy,
+                          borderColor: colors.primary,
                         },
+                        '&.Mui-focused fieldset': {
+                          borderColor: colors.primary,
+                        }
+                      },
+                      '& .MuiInputLabel-root': {
+                        color: colors.textSecondary,
+                      },
+                      '& .MuiInputLabel-root.Mui-focused': {
+                        color: colors.primary,
                       }
                     }}
                   />
@@ -4009,10 +4643,12 @@ const preloadCommonImages = () => {
                       onChange={(e) => setForm({ ...form, businessType: e.target.value })}
                       required
                       sx={{
-                        backgroundColor: colors.paper,
                         color: colors.text,
                         '&:hover .MuiOutlinedInput-notchedOutline': {
-                          borderColor: colors.borgundy,
+                          borderColor: colors.primary,
+                        },
+                        '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                          borderColor: colors.primary,
                         }
                       }}
                     >
@@ -4025,6 +4661,71 @@ const preloadCommonImages = () => {
                   </FormControl>
                 </Grid>
 
+                {/* Campo: Website */}
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    label="Website de la Tienda Online"
+                    fullWidth
+                    value={form.website}
+                    onChange={(e) => setForm({ ...form, website: e.target.value })}
+                    margin="normal"
+                    variant="outlined"
+                    placeholder="https://ejemplo.com"
+                    InputProps={{
+                      endAdornment: form.website && (
+                        <IconButton 
+                          size="small" 
+                          onClick={handleWebsiteScraping}
+                          disabled={scrapingLoading}
+                          sx={{ color: colors.primary }}
+                        >
+                          {scrapingLoading ? <CircularProgress size={20} /> : <LanguageIcon />}
+                        </IconButton>
+                      )
+                    }}
+                    sx={{
+                      '& .MuiOutlinedInput-root': {
+                        color: colors.text,
+                        '& fieldset': {
+                          borderColor: colors.border,
+                        },
+                        '&:hover fieldset': {
+                          borderColor: colors.primary,
+                        },
+                        '&.Mui-focused fieldset': {
+                          borderColor: colors.primary,
+                        }
+                      },
+                      '& .MuiInputLabel-root': {
+                        color: colors.textSecondary,
+                      },
+                      '& .MuiInputLabel-root.Mui-focused': {
+                        color: colors.primary,
+                      }
+                    }}
+                  />
+                  {form.website && (
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      startIcon={<LanguageIcon />}
+                      onClick={handleWebsiteScraping}
+                      disabled={scrapingLoading}
+                      sx={{ 
+                        mt: 1,
+                        borderColor: colors.primary,
+                        color: colors.primary,
+                        '&:hover': {
+                          borderColor: colors.secondary,
+                          backgroundColor: colors.border
+                        }
+                      }}
+                    >
+                      {scrapingLoading ? 'Buscando productos...' : 'Extraer productos del sitio web'}
+                    </Button>
+                  )}
+                </Grid>
+
                 <Grid item xs={12} sm={6}>
                   <FormControl fullWidth margin="normal">
                     <InputLabel sx={{ color: colors.textSecondary }}>Moneda</InputLabel>
@@ -4033,10 +4734,9 @@ const preloadCommonImages = () => {
                       label="Moneda"
                       onChange={(e) => setForm({ ...form, currency: e.target.value })}
                       sx={{
-                        backgroundColor: colors.paper,
                         color: colors.text,
                         '&:hover .MuiOutlinedInput-notchedOutline': {
-                          borderColor: colors.borgundy,
+                          borderColor: colors.primary,
                         }
                       }}
                     >
@@ -4050,13 +4750,15 @@ const preloadCommonImages = () => {
                 <Grid item xs={12} sm={6}>
                   <FormControl fullWidth margin="normal">
                     <Box sx={{ display: 'flex', alignItems: 'center', mt: 2 }}>
-                      <Checkbox
+                      <Switch
                         checked={form.contractActive}
                         onChange={(e) => setForm({ ...form, contractActive: e.target.checked })}
                         sx={{
-                          color: colors.borgundy,
-                          '&.Mui-checked': {
-                            color: colors.borgundy,
+                          '& .MuiSwitch-switchBase.Mui-checked': {
+                            color: colors.primary,
+                          },
+                          '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': {
+                            backgroundColor: colors.primary,
                           },
                         }}
                       />
@@ -4065,56 +4767,72 @@ const preloadCommonImages = () => {
                   </FormControl>
                 </Grid>
                 
+                {/* Mostrar resultados de scraping */}
+                {form.scrapedProducts.length > 0 && (
+                  <Grid item xs={12}>
+                    <Paper sx={{ 
+                      p: 2, 
+                      backgroundColor: colors.background, 
+                      borderRadius: 2,
+                      border: `1px solid ${colors.success}`,
+                      mt: 2
+                    }}>
+                      <Typography variant="subtitle2" gutterBottom fontWeight="bold" sx={{ color: colors.success }}>
+                        ✓ Productos encontrados en la tienda online: {form.scrapedProducts.length}
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: colors.textSecondary, display: 'block' }}>
+                        Estos productos se agregarán automáticamente al catálogo de la empresa
+                      </Typography>
+                    </Paper>
+                  </Grid>
+                )}
+
+                {/* Mostrar error de scraping */}
+                {form.scrapingStatus === 'error' && (
+                  <Grid item xs={12}>
+                    <Alert severity="warning" sx={{ mt: 2 }}>
+                      No se pudieron extraer productos del sitio web. 
+                      Los usuarios verán un botón "Visitar Tienda" en lugar de productos.
+                    </Alert>
+                  </Grid>
+                )}
+                
                 {editMode && (
                   <Grid item xs={12}>
                     <Paper sx={{ 
                       p: 2, 
-                      backgroundColor: colors.paper, 
+                      backgroundColor: colors.background, 
                       borderRadius: 2,
-                      border: `1px solid ${colors.shellstone}`
+                      border: `1px solid ${colors.border}`,
+                      mt: 2
                     }}>
-                      <Typography variant="subtitle2" gutterBottom fontWeight="bold" sx={{ color: colors.borgundy }}>
+                      <Typography variant="subtitle2" gutterBottom fontWeight="bold" sx={{ color: colors.primary }}>
                         Estadísticas actuales de la empresa:
                       </Typography>
                       <Box sx={{ display: 'flex', gap: 4, mt: 1 }}>
                         <Box sx={{ textAlign: 'center' }}>
-                          <StoreIcon sx={{ fontSize: 24, color: colors.borgundy }} />
-                          <Typography variant="h6" sx={{ color: colors.borgundy }}>
+                          <StoreIcon sx={{ fontSize: 24, color: colors.primary }} />
+                          <Typography variant="h6" sx={{ color: colors.primary }}>
                             {form.productsCount}
                           </Typography>
                           <Typography variant="body2" sx={{ color: colors.textSecondary }}>Productos</Typography>
                         </Box>
                         <Box sx={{ textAlign: 'center' }}>
-                          <CategoryIcon sx={{ fontSize: 24, color: colors.sapphire }} />
-                          <Typography variant="h6" sx={{ color: colors.sapphire }}>
+                          <CategoryIcon sx={{ fontSize: 24, color: colors.secondary }} />
+                          <Typography variant="h6" sx={{ color: colors.secondary }}>
                             {form.servicesCount}
                           </Typography>
                           <Typography variant="body2" sx={{ color: colors.textSecondary }}>Servicios</Typography>
                         </Box>
-                        <Box sx={{ textAlign: 'center' }}>
-                          <CheckCircleIcon 
-                            sx={{ fontSize: 24, color: form.contractActive ? "#4caf50" : "#f44336" }} 
-                          />
-                          <Typography 
-                            variant="h6" 
-                            sx={{ color: form.contractActive ? "#4caf50" : "#f44336" }}
-                          >
-                            {form.contractActive ? "Sí" : "No"}
-                          </Typography>
-                          <Typography variant="body2" sx={{ color: colors.textSecondary }}>Contrato Activo</Typography>
-                        </Box>
                       </Box>
                     </Paper>
-                    <Typography variant="caption" sx={{ mt: 1, display: 'block', color: colors.textSecondary }}>
-                      ⓘ Para actualizar los catálogos, suba nuevos archivos Excel
-                    </Typography>
                   </Grid>
                 )}
 
-                {/* Sección de Catálogos mejorada */}
+                {/* Sección de Catálogos */}
                 <Grid item xs={12}>
-                  <Divider sx={{ my: 2, borderColor: colors.shellstone }} />
-                  <Typography variant="subtitle1" fontWeight="bold" gutterBottom sx={{ color: colors.borgundy }}>
+                  <Divider sx={{ my: 2, borderColor: colors.border }} />
+                  <Typography variant="subtitle1" fontWeight="bold" gutterBottom sx={{ color: colors.primary }}>
                     Catálogos de la empresa
                   </Typography>
                 </Grid>
@@ -4123,20 +4841,20 @@ const preloadCommonImages = () => {
                 <Grid container spacing={2}>
                   {/* Subida de Productos */}
                   <Grid item xs={12} md={6}>
-                    <Box sx={{ mb: 3, p: 2, border: `1px solid ${colors.shellstone}`, borderRadius: 2, backgroundColor: colors.paper }}>
+                    <Box sx={{ mb: 3, p: 2, border: `1px solid ${colors.border}`, borderRadius: 2, backgroundColor: colors.background }}>
                       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                        <Typography variant="h6" sx={{ color: colors.borgundy }}>Catálogo de Productos</Typography>
+                        <Typography variant="h6" sx={{ color: colors.primary }}>Catálogo de Productos</Typography>
                         <Button
                           startIcon={<DownloadIcon />}
                           onClick={() => generateTemplate('products')}
                           size="small"
                           variant="outlined"
                           sx={{ 
-                            borderColor: colors.borgundy, 
-                            color: colors.borgundy,
+                            borderColor: colors.primary, 
+                            color: colors.primary,
                             '&:hover': {
-                              borderColor: colors.sapphire,
-                              backgroundColor: 'rgba(2, 33, 71, 0.04)'
+                              borderColor: colors.secondary,
+                              backgroundColor: colors.border
                             }
                           }}
                         >
@@ -4150,12 +4868,11 @@ const preloadCommonImages = () => {
                         startIcon={<UploadIcon />}
                         sx={{ 
                           justifyContent: 'flex-start',
-                          borderColor: files.products ? colors.borgundy : colors.shellstone,
-                          color: files.products ? colors.borgundy : colors.text,
-                          backgroundColor: files.products ? colors.paper : 'transparent',
+                          borderColor: files.products ? colors.primary : colors.border,
+                          color: files.products ? colors.primary : colors.text,
+                          backgroundColor: colors.paper,
                           '&:hover': {
-                            borderColor: colors.borgundy,
-                            backgroundColor: colors.paper,
+                            borderColor: colors.primary,
                           }
                         }}
                       >
@@ -4176,7 +4893,7 @@ const preloadCommonImages = () => {
                           <IconButton 
                             size="small" 
                             onClick={() => setFiles({ ...files, products: null })}
-                            sx={{ color: '#f44336' }}
+                            sx={{ color: colors.error }}
                           >
                             <DeleteIcon fontSize="small" />
                           </IconButton>
@@ -4192,20 +4909,20 @@ const preloadCommonImages = () => {
 
                   {/* Subida de Servicios */}
                   <Grid item xs={12} md={6}>
-                    <Box sx={{ mb: 3, p: 2, border: `1px solid ${colors.shellstone}`, borderRadius: 2, backgroundColor: colors.paper }}>
+                    <Box sx={{ mb: 3, p: 2, border: `1px solid ${colors.border}`, borderRadius: 2, backgroundColor: colors.background }}>
                       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                        <Typography variant="h6" sx={{ color: colors.borgundy }}>Catálogo de Servicios</Typography>
+                        <Typography variant="h6" sx={{ color: colors.primary }}>Catálogo de Servicios</Typography>
                         <Button
                           startIcon={<DownloadIcon />}
                           onClick={() => generateTemplate('services')}
                           size="small"
                           variant="outlined"
                           sx={{ 
-                            borderColor: colors.borgundy, 
-                            color: colors.borgundy,
+                            borderColor: colors.primary, 
+                            color: colors.primary,
                             '&:hover': {
-                              borderColor: colors.sapphire,
-                              backgroundColor: 'rgba(2, 33, 71, 0.04)'
+                              borderColor: colors.secondary,
+                              backgroundColor: colors.border
                             }
                           }}
                         >
@@ -4219,12 +4936,11 @@ const preloadCommonImages = () => {
                         startIcon={<UploadIcon />}
                         sx={{ 
                           justifyContent: 'flex-start',
-                          borderColor: files.services ? colors.borgundy : colors.shellstone,
-                          color: files.services ? colors.borgundy : colors.text,
-                          backgroundColor: files.services ? colors.paper : 'transparent',
+                          borderColor: files.services ? colors.primary : colors.border,
+                          color: files.services ? colors.primary : colors.text,
+                          backgroundColor: colors.paper,
                           '&:hover': {
-                            borderColor: colors.borgundy,
-                            backgroundColor: colors.paper,
+                            borderColor: colors.primary,
                           }
                         }}
                       >
@@ -4245,7 +4961,7 @@ const preloadCommonImages = () => {
                           <IconButton 
                             size="small" 
                             onClick={() => setFiles({ ...files, services: null })}
-                            sx={{ color: '#f44336' }}
+                            sx={{ color: colors.error }}
                           >
                             <DeleteIcon fontSize="small" />
                           </IconButton>
@@ -4272,7 +4988,7 @@ const preloadCommonImages = () => {
           </DialogContent>
           <DialogActions sx={{ 
             backgroundColor: colors.paper, 
-            borderTop: `1px solid ${colors.shellstone}`,
+            borderTop: `1px solid ${colors.border}`,
             p: 3 
           }}>
             <Button 
@@ -4287,9 +5003,8 @@ const preloadCommonImages = () => {
               disabled={loading}
               variant="contained"
               sx={{ 
-                backgroundColor: colors.borgundy,
-                '&:hover': { backgroundColor: colors.sapphire },
-                '&:disabled': { backgroundColor: '#cccccc' }
+                backgroundColor: colors.primary,
+                '&:hover': { backgroundColor: colors.secondary },
               }}
             >
               {loading ? (
@@ -4302,25 +5017,24 @@ const preloadCommonImages = () => {
           </DialogActions>
         </Dialog>
 
-        {/* Carrito con notificación de empresas inactivas */}
+        {/* Carrito - MODIFICADO con corrección de cantidad */}
         <Dialog open={showCart} onClose={() => setShowCart(false)} maxWidth="sm" fullWidth
           PaperProps={{
             sx: {
-              backdropFilter: 'blur(10px)',
-              border: `1px solid ${colors.shellstone}`,
-              borderRadius: 3
+              backgroundColor: colors.paper,
+              border: `1px solid ${colors.border}`,
+              borderRadius: 2
             }
           }}
         >
-          <DialogTitle sx={{ color: colors.borgundy }}>Carrito de Compras</DialogTitle>
+          <DialogTitle sx={{ color: colors.primary }}>Carrito de Compras</DialogTitle>
           <DialogContent>
             {cart.length === 0 ? (
-              <Alert severity="info" sx={{ backgroundColor: colors.paper, color: colors.text }}>
+              <Alert severity="info" sx={{ backgroundColor: colors.background, color: colors.text }}>
                 Tu carrito está vacío
               </Alert>
             ) : (
               <Box sx={{ mt: 2 }}>
-                {/* Notificación para items de empresas inactivas */}
                 {checkInactiveItemsInCart() && (
                   <Alert severity="warning" sx={{ mb: 2 }}>
                     Algunos productos y servicios en tu carrito pertenecen a empresas que actualmente no tienen contrato activo. 
@@ -4341,8 +5055,8 @@ const preloadCommonImages = () => {
                       justifyContent: 'space-between', 
                       alignItems: 'center', 
                       p: 1, 
-                      borderBottom: `1px solid ${colors.shellstone}`,
-                      backgroundColor: !isCompanyActive ? 'rgba(255, 152, 0, 0.1)' : 'transparent',
+                      borderBottom: `1px solid ${colors.border}`,
+                      backgroundColor: !isCompanyActive ? colors.warning + '10' : 'transparent',
                       '&:last-child': { borderBottom: 'none' }
                     }}>
                       <Box>
@@ -4354,34 +5068,35 @@ const preloadCommonImages = () => {
                           <Chip 
                             label="Empresa inactiva" 
                             size="small" 
-                            color="warning" 
-                            sx={{ mt: 0.5 }} 
+                            sx={{ 
+                              mt: 0.5,
+                              backgroundColor: colors.warning,
+                              color: 'white'
+                            }} 
                           />
                         )}
                       </Box>
-                      {/* En el diálogo del carrito - CORREGIDO */}
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         <IconButton 
                           size="small" 
-                          onClick={() => updateQuantity(item.id, -1)}
+                          onClick={() => updateQuantity(item.id, -1)} // Cambia de 1 en 1
                           disabled={item.quantity <= 1}
-                          sx={{ color: colors.borgundy }}
+                          sx={{ color: colors.primary }}
                         >
                           <RemoveCircleIcon fontSize="small" />
                         </IconButton>
                         <Typography variant="body2" sx={{ color: colors.text }}>{item.quantity}</Typography>
                         <IconButton 
                           size="small" 
-                          onClick={() => updateQuantity(item.id, 1)}
-                          sx={{ color: colors.borgundy }}
+                          onClick={() => updateQuantity(item.id, 1)} // Cambia de 1 en 1
+                          sx={{ color: colors.primary }}
                         >
                           <AddCircleIcon fontSize="small" />
                         </IconButton>
-                        {/* CORREGIDO: Botón de eliminar completamente */}
                         <IconButton 
                           size="small" 
                           onClick={() => removeFromCart(item.id)}
-                          sx={{ color: '#f44336' }}
+                          sx={{ color: colors.error }}
                         >
                           <DeleteIcon fontSize="small" />
                         </IconButton>
@@ -4390,10 +5105,10 @@ const preloadCommonImages = () => {
                   );
                 })}
                 
-                <Box sx={{ mt: 3, p: 2, backgroundColor: colors.paper, borderRadius: 2, border: `1px solid ${colors.shellstone}` }}>
+                <Box sx={{ mt: 3, p: 2, backgroundColor: colors.background, borderRadius: 2, border: `1px solid ${colors.border}` }}>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                     <Typography variant="body1" sx={{ color: colors.text, fontWeight: 'bold' }}>Total:</Typography>
-                    <Typography variant="body1" sx={{ color: 'red', fontWeight: 'bold' }}>
+                    <Typography variant="body1" sx={{ color: colors.error, fontWeight: 'bold' }}>
                       ${cartTotal.toFixed(2)} CUP
                     </Typography>
                   </Box>
@@ -4410,24 +5125,23 @@ const preloadCommonImages = () => {
                   {selectedProjectObj && (
                     <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                       <Typography variant="body1" sx={{ color: colors.text, fontWeight: 'bold' }}>Restante:</Typography>
-                      <Typography variant="body1" sx={{ color: remainingBudget >= 0 ? 'green' : 'red', fontWeight: 'bold' }}>
+                      <Typography variant="body1" sx={{ color: remainingBudget >= 0 ? colors.success : colors.error, fontWeight: 'bold' }}>
                         ${remainingBudget.toFixed(2)} CUP
                       </Typography>
                     </Box>
                   )}
                 </Box>
 
-                <FormControl fullWidth sx={{ mb: 3 }}>
+                <FormControl fullWidth sx={{ mb: 3, mt: 2 }}>
                   <InputLabel sx={{ color: colors.textSecondary }}>Proyecto</InputLabel>
                   <Select
                     value={selectedProject}
                     label="Proyecto"
                     onChange={(e) => setSelectedProject(e.target.value)}
                     sx={{
-                      backgroundColor: 'transparent',
                       color: colors.text,
                       '&:hover .MuiOutlinedInput-notchedOutline': {
-                        borderColor: colors.borgundy,
+                        borderColor: colors.primary,
                       }
                     }}
                   >
@@ -4436,7 +5150,6 @@ const preloadCommonImages = () => {
                       const remainingBudget = getRemainingBudget(project);
                       return (
                         <MenuItem key={project.id} value={project.id}>
-                          {/*  Mostrar información completa como en Proyectos.jsx */}
                           {project.costCenter} - {project.projectNumber} | {project.name} | 
                           Presupuesto: ${remainingBudget.toFixed(2)} CUP
                         </MenuItem>
@@ -4447,29 +5160,27 @@ const preloadCommonImages = () => {
               </Box>
             )}
           </DialogContent>
-          <DialogActions sx={{ p: 2 }}>
+          <DialogActions sx={{ p: 2, borderTop: `1px solid ${colors.border}` }}>
             <Button onClick={() => setShowCart(false)} sx={{ color: colors.textSecondary }}>Cerrar</Button>
             {cart.length > 0 && (
               <>
                 <Button 
                   onClick={clearCart} 
-                  sx={{ color: '#f44336' }}
+                  sx={{ color: colors.error }}
                   disabled={loading}
                 >
                   Vaciar
                 </Button>
-                {/* CORREGIDO: Botón Finalizar Compra - ahora se activa correctamente */}
                 <Button
                   onClick={checkout}
                   variant="contained"
                   disabled={!canFinalizePurchase() || loading}
                   sx={{ 
-                    backgroundColor: colors.borgundy,
-                    '&:hover': { backgroundColor: colors.sapphire },
-                    '&:disabled': { backgroundColor: '#cccccc' }
+                    backgroundColor: colors.primary,
+                    '&:hover': { backgroundColor: colors.secondary },
                   }}
                 >
-                  {loading ? 'Procesando...' : 'Finalizar Compra'}
+                  {loading ? 'Procesando...' : editingOrderId ? 'Actualizar Pedido' : 'Finalizar Compra'}
                 </Button>
               </>
             )}

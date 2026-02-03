@@ -1607,7 +1607,7 @@ const renderStatsCards = () => (
       <Box sx={{ 
         marginTop: isMobile ? '10%' : 5, 
         mb: isMobile ? 2 : 3,
-        ml: isMobile ? 0 : sidebarExpanded ? 0 : 2
+        ml: isMobile ? 0 : sidebarExpanded ? 1 : 2
       }}>
         <Grid container spacing={2} alignItems="center">
           <Grid item xs={12} md={8}>
@@ -2334,13 +2334,6 @@ const renderStatsCards = () => (
                 sx={{ fontSize: isMobile ? '0.65rem' : '0.75rem' }}
               >
                 Última actualización: {new Date().toLocaleDateString('es-ES')}
-              </Typography>
-              <Typography 
-                variant="caption" 
-                color={currentColors.textSecondary}
-                sx={{ fontSize: isMobile ? '0.65rem' : '0.75rem' }}
-              >
-                • {filteredData?.allOrders?.length || 0} pedidos procesados
               </Typography>
             </Box>
           </Grid>

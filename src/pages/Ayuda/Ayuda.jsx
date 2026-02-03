@@ -965,17 +965,6 @@ const Ayuda = () => {
                   </ListItem>
                 </List>
 
-                <Box sx={{ 
-                  mt: 2, 
-                  p: 1, 
-                  backgroundColor: COLORS.swanWhite, // Cambiado
-                  borderRadius: 1,
-                  border: `1px solid ${COLORS.shellstone}` // Cambiado
-                }}>
-                  <Typography variant="body2" sx={{ color: COLORS.sapphire }}> {/* Cambiado */}
-                    <strong>Tiempo de respuesta:</strong> Generalmente respondemos en menos de 48 horas hábiles.
-                  </Typography>
-                </Box>
               </Paper>
             </CardContent>
           </Card>

@@ -52,6 +52,8 @@ const Usuarios = () => {
     sapphire: '#667080',
     swanWhite: '#F5F0E9',
     shellstone: '#D9CBC2',
+    background: '#F5F0E9',
+    paper: '#FFFFFF',
   };
 
   // Estados
@@ -110,6 +112,39 @@ const Usuarios = () => {
     window.addEventListener('storage', handleStorageChange);
     return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
+
+  // Añadir esta función en Usuarios.jsx
+const createTestProjectForUser = (userId, userName) => {
+  try {
+    const testProject = {
+      id: `proj_${Date.now()}`,
+      costCenter: '123456',
+      projectNumber: 'TEST2024',
+      name: 'Proyecto de Prueba',
+      description: 'Proyecto asignado automáticamente para pruebas del sistema',
+      budget: 100000,
+      areaType: 'facultad',
+      area: 'Matemática y Computación',
+      endDate: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 90 días desde hoy
+      status: 'active',
+      ownerId: userId,
+      ownerName: userName,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    const userProjectsKey = `SiPP_projects_${userId}`;
+    const existingProjects = JSON.parse(localStorage.getItem(userProjectsKey) || '[]');
+    const updatedProjects = [...existingProjects, testProject];
+    localStorage.setItem(userProjectsKey, JSON.stringify(updatedProjects));
+
+    console.log(`Proyecto de prueba creado para usuario ${userName}`);
+  } catch (error) {
+    console.error('Error al crear proyecto de prueba:', error);
+  }
+};
+
+// Llamar esta función al crear o cargar usuarios
 
   // Función para eliminar usuario
   const handleDeleteUser = (userId) => {
@@ -235,9 +270,9 @@ const handleSaveEdit = () => {
     return;
   }
 
-  // Validar que no se pueda asignar rol admin o comercial
-  if (editForm.role === 'admin' || editForm.role === 'comercial') {
-    alert('No se puede asignar el rol de administrador o comercial a usuarios comunes');
+  // Validar que no se pueda asignar rol admin o comercial o gestor
+  if (editForm.role === 'admin' || editForm.role === 'comercial' || editForm.role === 'gestor') {
+    alert('No se puede asignar el rol de administrador, comercial o gestor a usuarios comunes');
     return;
   }
 
@@ -412,7 +447,7 @@ const handleSaveEdit = () => {
         borderRadius: 3,
         background: theme.palette.mode === 'dark'
           ? `linear-gradient(135deg, ${alpha(colors.sapphire, 0.15)} 0%, ${alpha(colors.borgundy, 0.1)} 100%)`
-          : `linear-gradient(135deg, ${colors.swanWhite} 0%, ${colors.shellstone}20 100%)`,
+          : `linear-gradient(135deg, ${colors.paper} 0%, ${colors.shellstone}20 100%)`,
         backdropFilter: 'blur(10px)',
         border: `1px solid ${alpha(theme.palette.divider, 0.2)}`,
         boxShadow: '0 8px 32px rgba(0,0,0,0.1)',
@@ -431,7 +466,7 @@ const handleSaveEdit = () => {
               fullWidth
               sx={{
                 '& .MuiOutlinedInput-root': {
-                  backgroundColor: colors.swanWhite,
+                  backgroundColor: colors.paper,
                   '&:hover fieldset': { borderColor: colors.sapphire },
                 }
               }}
@@ -485,8 +520,8 @@ const handleSaveEdit = () => {
           boxShadow: '0 8px 32px rgba(0,0,0,0.1)',
           overflow: 'hidden',
           background: theme.palette.mode === 'dark'
-            ? `linear-gradient(135deg, ${alpha(colors.sapphire, 0.15)} 0%, ${alpha(colors.borgundy, 0.1)} 100%)`
-            : `linear-gradient(135deg, ${colors.swanWhite} 0%, ${colors.swanWhite}20 100%)`,
+            ? colors.sapphire
+            : colors.paper,
           backdropFilter: 'blur(10px)',
           border: `1px solid ${alpha(theme.palette.divider, 0.2)}`,
         }}>
@@ -549,6 +584,8 @@ const handleSaveEdit = () => {
                             ? 'Administrador'
                             : client.role === 'comercial'
                             ? 'Comercial'
+                            : client.role === 'gestor'
+                            ? 'Gestor'
                             : 'Jefe de Proyecto'
                         }
                         size="small"
@@ -567,20 +604,6 @@ const handleSaveEdit = () => {
                     </TableCell>
                     <TableCell>
                       <Box sx={{ display: 'flex', gap: 1 }}>
-                        <Tooltip title="Editar usuario">
-                          <IconButton 
-                            size="small" 
-                            sx={{ 
-                              color: colors.sapphire,
-                              '&:hover': { 
-                                backgroundColor: alpha(colors.sapphire, 0.1) 
-                              }
-                            }}
-                            onClick={() => handleEditUser(client.id)}
-                          >
-                            <EditIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
                         <Tooltip title="Eliminar usuario">
                           <IconButton 
                             size="small" 
